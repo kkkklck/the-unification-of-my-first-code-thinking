@@ -59,8 +59,8 @@ BLOCKS_PER_SHEET   = 5
 # 打印顺序：可自行调整位置
 CATEGORY_ORDER = ["钢柱", "钢梁", "支撑", "其他"]
 
-# 支撑分桶策略："number"=按编号（默认），"floor"=按楼层
-support_bucket_strategy = "number"
+# 支撑分桶策略："number"=按编号，"floor"=按楼层；仅本次运行生效
+support_bucket_strategy = None
 
 # ===== Word 汇总生成 =====
 NEED_COLS = 11
@@ -1096,6 +1096,16 @@ def prompt_bucket_priority():
     ans = input("规则重叠将按【后面的天】优先并自动做差（回车=是 / n=否）：\n→ ").strip().lower()
     return ans != 'n'
 
+
+def prompt_support_strategy_for_bucket():
+    """在需要支撑分桶策略时询问一次。"""
+    global support_bucket_strategy
+    if support_bucket_strategy is None:
+        ans = input("支撑分桶方式：1) 按编号 2) 按楼层（回车=1）\n→ ").strip()
+        support_bucket_strategy = "floor" if ans == "2" else "number"
+    return support_bucket_strategy
+
+
 def prompt_date_buckets(categories_present):
     """
     交互式收集日期桶配置，支持1-10天的检测数据分发规则。
@@ -1120,11 +1130,12 @@ def prompt_date_buckets(categories_present):
     buckets = []
     for i in range(1, n+1):
         print(f"\n—— 第 {i} 天 ——")
-        d = input("📅 日期（20250101 / 2025.1.1 / 2025 1 1 / 2025年1月1日）：\n→ ").strip()
+        d = input("📅 日期（20250101 / 2025年1月1日 / 2025 1 1 / 2025.1.1 / 2025-1-1 / 1-1 / 01-01）：\n→ ").strip()
         e = input("🌡 环境温度（24 / 24℃ / 24 度 / 24 C）：\n→ ").strip()
         rules = {}
         for cat in categories_present:
             if cat == "支撑":
+                prompt_support_strategy_for_bucket()
                 if support_bucket_strategy == "floor":
                     txt = input("🦾 支撑 楼层规则（例：1-3 5 7-10 屋面；留空=不接收；*=不限）：\n→ ").strip()
                 else:
@@ -1394,7 +1405,7 @@ def _prompt_dates_and_limits():
     """交互获取日期、每日数量及环境温度。"""
     while True:
         txt = input(
-            "日期（空格/逗号分隔；支持 YYYY-MM-DD / MM-DD / 20250101 / 2025年1月1日 / 2025 1 1 / 2025.1.1，\n"
+            "日期（空格/逗号分隔；支持 20250101 / 2025年1月1日 / 2025 1 1 / 2025.1.1 / 2025-1-1 / 1-1 / 01-01，\n"
             "年份默认取首个日期的年或当前年）：例如 2025-08-27 8-28 2025年1月1日\n→ "
         ).strip()
         if any(ch in txt for ch in "；;，、/\\|"):
@@ -1427,20 +1438,27 @@ def _prompt_dates_and_limits():
     return list(zip(dates, limits, envs))
 
 
-def _summarize_plan(tag, plan):
+def _summarize_plan(tag, plan, all_floors=None):
     """输出楼层计划摘要，便于用户确认。"""
 
     def fmt(entry):
-        ds = " ".join(x[0] for x in entry)
+        ds = " ".join(normalize_date(x[0]) for x in entry)
         ls = ",".join(str(x[1]) if x[1] is not None else "-" for x in entry)
-        return f"[{ds}] 数量={ls}"
+        return f"{ds} → {ls}"
 
+    specified = [f for f in plan if f != "*"]
+    if specified:
+        print("已单独配置：")
+        for f in sorted(specified, key=_floor_sort_key_by_label):
+            print(f"  {f} → {fmt(plan[f])}")
     if "*" in plan:
-        print(f"✅ {tag}：默认 {fmt(plan['*'])}")
-    for f, entry in plan.items():
-        if f == "*":
-            continue
-        print(f"✅ {tag}：{f} → {fmt(entry)}")
+        print("默认配置：")
+        print(f"  * → {fmt(plan['*'])}")
+    if all_floors:
+        miss = [f for f in all_floors if f not in plan and "*" not in plan]
+        if miss:
+            miss_txt = " ".join(sorted(miss, key=_floor_sort_key_by_label))
+            print(f"未覆盖的楼层：{miss_txt} （稍后统一处理/回落到日期分桶）")
 
 
 def _prompt_plan_for_floors(floors, shared=True):
@@ -1473,6 +1491,7 @@ def _prompt_plan_for_floors(floors, shared=True):
         print("没有合法楼层，请重输。")
     targets = floors if sel is None else sel
     if shared:
+        print("下面输入的日期与每日上限，将自动应用到以上所有楼层")
         date_entries = _prompt_dates_and_limits()
         if sel is None:
             return {"*": date_entries}
@@ -1496,20 +1515,21 @@ def prompt_mode4_plan(floors_by_cat, categories_present):
         if not fls:
             continue
         print(f"\n[{cat}]")
-        share = input("这些楼层是否共用日期和数量？(y=共用，回车=不共用)\n→ ").strip().lower() == "y"
+        share = input("这些楼层用同一套日期/数量吗？（y=是，回车=分别设置）\n→ ").strip().lower() == "y"
         plans[cat] = _prompt_plan_for_floors(fls, shared=share)
-        # —— 新增：给未指定楼层兜底 ——
+            # —— 新增：给未指定楼层兜底 ——
         all_floors = sorted(floors_by_cat.get(cat, set()), key=_floor_sort_key_by_label)
         plan_for_cat = plans[cat]
         specified = {f for f in plan_for_cat.keys() if f != "*"}
         if "*" not in plan_for_cat and len(specified) < len(all_floors):
             miss = [f for f in all_floors if f not in specified]
+            print(f"👉 {cat} 还有未配置楼层：{' '.join(miss)}")
             ans = input(
-                f"👉 {cat} 还有未指定楼层：{' '.join(miss)}，是否为它们套用【默认】日期/数量？(y=是 / 回车=否)\n→ "
+                    "要不要给“未配置”的楼层用一套通用的日期/数量？（y=是，回车=跳过；未配置的楼层稍后会再统一询问或回落到日期分桶）\n→ "
             ).strip().lower()
             if ans == "y":
-                plan_for_cat["*"] = _prompt_dates_and_limits()
-        _summarize_plan(cat, plan_for_cat)
+                    plan_for_cat["*"] = _prompt_dates_and_limits()
+        _summarize_plan(cat, plan_for_cat, all_floors)
     return plans
 
 
@@ -1717,6 +1737,7 @@ def main():
     print(f"✅ 使用 Word：{src}")
     global _LAST_SRC, support_bucket_strategy
     _LAST_SRC = src
+    support_bucket_strategy = None
 
     # 2) 解析 Word（带进度）
 
@@ -1758,12 +1779,6 @@ def main():
     if try_handle_mode4(mode, wb, grouped, categories_present):
         return
 
-    # 支撑分桶策略选择
-    support_bucket_strategy = "number"
-    if with_support and mode in ("1", "2", "3"):
-        ans = input("支撑分桶方式：1) 按编号 2) 按楼层（回车=1）\n→ ").strip()
-        support_bucket_strategy = "floor" if ans == "2" else "number"
-
     if mode == "2":
         # —— 旧法：断点 ——
         has_gz = "钢柱" in categories_present
@@ -1801,7 +1816,7 @@ def main():
                     fill_blocks_to_pages(wb, pages_by_cat[cat], blocks_by_cat[cat], prog)
             prog.finish()
 
-            d = normalize_date(input("📅 整单日期（回车=不写）：\n→ ").strip() or "")
+            d = normalize_date(input("📅 整单日期（20250101 / 2025年1月1日 / 2025 1 1 / 2025.1.1 / 2025-1-1 / 1-1 / 01-01；回车=不写）：\n→ ").strip() or "")
             e = normalize_env(input("🌡 整单环境（回车=不写）：\n→ ").strip() or "")
             apply_meta_on_pages(wb, target, d, e, auto_instrument=True)
             used_names_total = target
@@ -1814,6 +1829,7 @@ def main():
             breaks_by_cat = {}
             for cat in categories_present:
                 if cat == "支撑":
+                    prompt_support_strategy_for_bucket()
                     if support_bucket_strategy == "floor":
                         breaks_by_cat[cat] = prompt_floor_breaks(cat)
                     else:
@@ -1910,7 +1926,7 @@ def main():
                 fill_blocks_to_pages(wb, pages_by_cat[cat], blocks_by_cat[cat], prog)
         prog.finish()
 
-        d = normalize_date(input("📅 日期（回车=不写）：\n→ ").strip() or "")
+        d = normalize_date(input("📅 日期：20250101 / 2025年1月1日 / 2025 1 1 / 2025.1.1 / 2025-1-1 / 1-1 / 01-01；（回车=不写）：\n→ ").strip() or "")
         e = normalize_env(input("🌡 环境温度（回车=不写）：\n→ ").strip() or "")
         apply_meta_on_pages(wb, target, d, e, auto_instrument=True)
         used_names_total = target
