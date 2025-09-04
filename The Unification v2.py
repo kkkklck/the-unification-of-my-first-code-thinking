@@ -29,9 +29,9 @@
 
 
 from pathlib import Path
-import re, copy, math, warnings, sys, datetime
+import re, copy, math, warnings, sys
 from collections import defaultdict
-
+from datetime import datetime
 from docx import Document
 from docx.shared import RGBColor, Pt
 from openpyxl import load_workbook
@@ -42,7 +42,7 @@ from openpyxl.styles import Font, Alignment
 warnings.filterwarnings("ignore", category=SyntaxWarning)
 
 TITLE   = "The Unification"
-VERSION = "v 2.1.0"
+VERSION = "v 3.0.1"
 
 # ===== 默认路径（自己改成你的默认值即可）=====
 WORD_SRC_DEFAULT = Path(r"D:\eg\eg.docx")
