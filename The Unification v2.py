@@ -29,7 +29,7 @@
 
 
 from pathlib import Path
-import re, copy, math, warnings, sys
+import re, copy, math, warnings, sys, datetime
 from collections import defaultdict
 
 from docx import Document
@@ -46,9 +46,11 @@ VERSION = "v 2.1.0"
 
 # ===== 默认路径（自己改成你的默认值即可）=====
 WORD_SRC_DEFAULT = Path(r"D:\eg\eg.docx")
-XLSX_WITH_SUPPORT_DEFAULT = Path(r"D:\防火原始文件\防火２有支撑版.xlsx")
-XLSX_NO_SUPPORT_DEFAULT   = Path(r"D:\防火原始文件\防火２无支撑版.xlsx")
+XLSX_WITH_SUPPORT_DEFAULT = Path(r"E:\公司尝试\防火原始文件\防火２有支撑版.xlsx")
+XLSX_NO_SUPPORT_DEFAULT   = Path(r"E:\公司尝试\防火原始文件\防火２无支撑版.xlsx")
 DEFAULT_FONT_PT = 9
+
+_LAST_SRC = None  # 记录当前Word路径，供模式4保存Excel
 
 # 每页 5 组、每组 5 行、每行 8 读数+平均值
 PER_LINE_PER_BLOCK = 5
@@ -390,6 +392,37 @@ def floor_of(name: str) -> int:
     if m: return int(m.group(1))
     if re.search(r"(?i)\bB\s*\d+\b|负\s*\d+\s*层?", s): return 0
     return 0
+
+
+def _floor_label_from_name(name: str) -> str:
+    """根据名称提取楼层标签，如"5F"、"B2"、"屋面"等。"""
+    s = (name or "").replace("－", "-").replace("—", "-").replace("–", "-")
+    if re.search(r"屋面|顶层", s):
+        return "屋面"
+    if "机房层" in s:
+        return "机房层"
+    m = re.search(r"(?i)B\s*(\d+)", s)
+    if m:
+        return f"B{int(m.group(1))}"
+    m = re.search(r"(\d+)\s*[Ff层樓楼]?", s)
+    if m:
+        return f"{int(m.group(1))}F"
+    return "F?"
+
+
+def _floor_sort_key_by_label(label: str):
+    """生成楼层标签的排序键。"""
+    m = re.fullmatch(r"B(\d+)", label)
+    if m:
+        return (0, -int(m.group(1)))
+    m = re.fullmatch(r"(\d+)F", label)
+    if m:
+        return (1, int(m.group(1)))
+    if label == "机房层":
+        return (2, 0)
+    if label == "屋面":
+        return (3, 0)
+    return (4, 0)
 
 def segment_index(floor: int, breaks: list[int]) -> int:
     """
@@ -814,6 +847,71 @@ def normalize_env(text: str) -> str:
     val = float(m.group(0))
     return f"{int(val)}℃" if val.is_integer() else f"{str(val).rstrip('0').rstrip('.')}℃"
 
+
+def _normalize_date_token(tok: str, base_year: int) -> str:
+    """将单个日期 token 规范为"YYYY-MM-DD"，失败返回空串。"""
+    if not tok:
+        return ""
+    tok = tok.strip()
+    tok = tok.replace("年", "-").replace("月", "-").replace("日", "")
+    tok = tok.replace("/", "-").replace(".", "-")
+    tok = re.sub(r"\s+", "-", tok)
+    if re.fullmatch(r"\d{8}", tok):
+        y = int(tok[:4]);
+        mth = int(tok[4:6]);
+        d = int(tok[6:])
+    else:
+        m = re.fullmatch(r"(\d{4})-(\d{1,2})-(\d{1,2})", tok)
+        if m:
+            y, mth, d = map(int, m.groups())
+        else:
+            m = re.fullmatch(r"(\d{1,2})-(\d{1,2})", tok)
+            if not m:
+                return ""
+            y = base_year
+            mth, d = map(int, m.groups())
+    if not (1 <= mth <= 12 and 1 <= d <= 31):
+        return ""
+    return f"{y:04d}-{mth:02d}-{d:02d}"
+
+
+def _parse_dates_simple(input_str: str):
+    """简单解析多个日期，返回(日期列表, 无效token列表)。"""
+    tokens = [t for t in re.split(r"[ ,]+", input_str.strip()) if t]
+    res, ignored = [], []
+    seen = set()
+    base_year = None
+    cur_year = datetime.now().year
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        norm = _normalize_date_token(tok, base_year or cur_year)
+        consumed = 1
+        if not norm:
+            if re.fullmatch(r"\d{4}", tok) and i + 2 < len(tokens):
+                if tokens[i + 1].isdigit() and tokens[i + 2].isdigit():
+                    norm = _normalize_date_token(
+                        f"{tok}-{tokens[i + 1]}-{tokens[i + 2]}",
+                        base_year or cur_year,
+                    )
+                    consumed = 3
+            elif tok.isdigit() and i + 1 < len(tokens) and tokens[i + 1].isdigit():
+                norm = _normalize_date_token(
+                    f"{tok}-{tokens[i + 1]}",
+                    base_year or cur_year,
+                )
+                consumed = 2
+        if norm:
+            if base_year is None:
+                base_year = int(norm[:4])
+            if norm not in seen:
+                res.append(norm);
+                seen.add(norm)
+        else:
+            ignored.extend(tokens[i:i + consumed])
+        i += consumed
+    return res, ignored
+
 # ===== 交互 =====
 def prompt_path(prompt, default: Path) -> Path:
     """
@@ -966,17 +1064,22 @@ def prompt_mode():
     """
     交互式选择数据处理模式，返回用户选择的模式编号。
 
-    提供三种模式选项：
-    1. 日期分桶模式（推荐，按日期分配数据）
-    2. 楼层断点模式（兼容旧流程，按楼层分段）
+    提供四种模式选项：
+    1. 日期分桶模式（按日期分配数据）
+    2. 楼层断点模式（兼容旧流程）
     3. 简单模式（单日期/温度，不分段）
+    4. 楼层+日期配额模式
     支持回车默认选择模式1。
 
     Returns:
-        str: 模式编号（"1"|"2"|"3"）
+        str: 模式编号（"1"|"2"|"3"|"4"）
     """
-    txt = input("模式选择：1) 按日期分桶（推荐）  2) 按楼层断点（兼容旧法）  3) 一次填日期/温度（不分段）\n→ ").strip()
-    return "1" if txt in ("", "1") else ("2" if txt=="2" else "3")
+    txt = input("模式选择：1) 按日期分桶  2) 按楼层断点  3) 单日模式  4) 楼层+日期配额\n→ ").strip()
+    if txt in ("", "1"):
+        return "1"
+    if txt in ("2", "3", "4"):
+        return txt
+    return "1"
 
 def prompt_bucket_priority():
     """
@@ -1239,14 +1342,328 @@ def cleanup_unused_sheets(wb, used_names, bases=("钢柱","钢梁","支撑","其
     """
     used = set(used_names)
     to_remove = []
-    for ws in wb.worksheets:
+    for ws in list(wb.worksheets):
         if any(ws.title == b or ws.title.startswith(f"{b}（") for b in bases):
             if ws.title not in used:
-                to_remove.append(ws.title)
+                to_remove.append(ws)
     if len(to_remove) >= len(wb.worksheets):
         to_remove = to_remove[:-1]
-    for nm in to_remove:
-        wb.remove(wb[nm])
+    for ws in to_remove:
+        wb.remove(ws)
+
+
+def _distribute_by_dates(items, date_entries):
+    """按日期列表将项目分配到各天。"""
+    res = []
+    if not date_entries:
+        return res
+    if date_entries[0][1] is not None:  # 配额模式
+        cursor = 0
+        total = len(items)
+        for i, (d, limit, env) in enumerate(date_entries):
+            if i < len(date_entries) - 1:
+                take = min(limit, total - cursor)
+            else:
+                take = total - cursor
+            res.append((d, env, items[cursor:cursor + take]))
+            cursor += take
+    else:  # 均分
+        days = len(date_entries)
+        per = math.ceil(len(items) / days) if days else 0
+        cursor = 0
+        for i, (d, _, env) in enumerate(date_entries):
+            if i < days - 1:
+                take = min(per, len(items) - cursor)
+            else:
+                take = len(items) - cursor
+            res.append((d, env, items[cursor:cursor + take]))
+            cursor += take
+    return res
+
+
+def _prompt_dates_and_limits():
+    """交互获取日期、每日数量及环境温度。"""
+    while True:
+        txt = input(
+            "日期（用空格或逗号分隔；允许 YYYY-MM-DD 或 MM-DD，年份默认取首个日期的年或当前年）：例如 2025-08-27 8-28 8-29\n→ "
+        ).strip()
+        if any(ch in txt for ch in "；;，、/\\|"):
+            print("只接受逗号或空格分隔，请重输。")
+            continue
+        dates, ig = _parse_dates_simple(txt)
+        if not dates:
+            print("请输入至少一个合法日期。")
+            continue
+        if ig:
+            print("已忽略：" + "、".join(ig))
+        break
+    while True:
+        txt = input("每日数量（按日期顺序；空=均分；填整数=配额）\n→ ").strip()
+        if txt == "":
+            limits = [None] * len(dates)
+            break
+        tokens = [t for t in re.split(r"[ ,]+", txt) if t]
+        if all(t.isdigit() and int(t) > 0 for t in tokens):
+            if len(tokens) == 1:
+                limits = [int(tokens[0])] * len(dates)
+                break
+            if len(tokens) == len(dates):
+                limits = [int(t) for t in tokens]
+                break
+        print(f"请输入{len(dates)}个正整数或留空。")
+    envs = []
+    for d in dates:
+        envs.append(input(f"{d} 的环境温度（回车=不写）：\n→ ").strip())
+    return list(zip(dates, limits, envs))
+
+
+def _summarize_plan(tag, plan):
+    """输出楼层计划摘要，便于用户确认。"""
+
+    def fmt(entry):
+        ds = " ".join(x[0] for x in entry)
+        ls = ",".join(str(x[1]) if x[1] is not None else "-" for x in entry)
+        return f"[{ds}] 数量={ls}"
+
+    if "*" in plan:
+        print(f"✅ {tag}：默认 {fmt(plan['*'])}")
+    for f, entry in plan.items():
+        if f == "*":
+            continue
+        print(f"✅ {tag}：{f} → {fmt(entry)}")
+
+
+def _prompt_plan_for_floors(floors, shared=True):
+    """针对给定楼层集合交互生成计划。"""
+    floors = sorted(set(floors), key=_floor_sort_key_by_label)
+    if floors:
+        print("已识别楼层：" + " ".join(floors))
+    # Step1 楼层
+    while True:
+        txt = input("适用楼层（回车=全部）：示例 5F, 6F, B2, 屋面 或 5 6 B2\n→ ").strip()
+        if any(ch in txt for ch in "；;，、/\\|"):
+            print("只接受逗号或空格分隔，请重输。")
+            continue
+        if not txt:
+            sel = None
+            break
+        tokens = [t for t in re.split(r"[ ,]+", txt) if t]
+        seen, sel, ig = set(), [], []
+        for t in tokens:
+            lb = _floor_label_from_name(t)
+            if lb != "F?" and lb in floors and lb not in seen:
+                sel.append(lb);
+                seen.add(lb)
+            else:
+                ig.append(t)
+        if ig:
+            print("已忽略：" + "、".join(ig))
+        if sel:
+            break
+        print("没有合法楼层，请重输。")
+    targets = floors if sel is None else sel
+    if shared:
+        date_entries = _prompt_dates_and_limits()
+        if sel is None:
+            return {"*": date_entries}
+        return {f: date_entries for f in targets}
+    plan = {}
+    for f in targets:
+        print(f"{f}：")
+        plan[f] = _prompt_dates_and_limits()
+    return plan
+
+
+def prompt_mode4_plan(floors_by_cat, categories_present):
+    """模式4交互，分别为各类别获取楼层计划。"""
+    print("各类别楼层：")
+    for cat in categories_present:
+        fls = sorted(floors_by_cat.get(cat, set()), key=_floor_sort_key_by_label)
+        print(f"{cat}: {(' '.join(fls)) if fls else '/'}")
+    plans = {}
+    for cat in categories_present:
+        fls = floors_by_cat.get(cat, set())
+        if not fls:
+            continue
+        print(f"\n[{cat}]")
+        share = input("这些楼层是否共用日期和数量？(y=共用，回车=不共用)\n→ ").strip().lower() == "y"
+        plans[cat] = _prompt_plan_for_floors(fls, shared=share)
+        # —— 新增：给未指定楼层兜底 ——
+        all_floors = sorted(floors_by_cat.get(cat, set()), key=_floor_sort_key_by_label)
+        plan_for_cat = plans[cat]
+        specified = {f for f in plan_for_cat.keys() if f != "*"}
+        if "*" not in plan_for_cat and len(specified) < len(all_floors):
+            miss = [f for f in all_floors if f not in specified]
+            ans = input(
+                f"👉 {cat} 还有未指定楼层：{' '.join(miss)}，是否为它们套用【默认】日期/数量？(y=是 / 回车=否)\n→ "
+            ).strip().lower()
+            if ans == "y":
+                plan_for_cat["*"] = _prompt_dates_and_limits()
+        _summarize_plan(cat, plan_for_cat)
+    return plans
+
+
+def mode4_run(wb, grouped, categories_present):
+    """执行模式4：按楼层和日期写入Excel。"""
+    cf_groups = defaultdict(list)
+    floors_by_cat = defaultdict(set)
+    for cat in categories_present:
+        for g in grouped[cat]:
+            fl = _floor_label_from_name(g["name"])
+            cf_groups[(cat, fl)].append(g)
+            floors_by_cat[cat].add(fl)
+    plan_dict = prompt_mode4_plan(floors_by_cat, categories_present)
+
+    blocks_by_cat_bucket = {cat: defaultdict(list) for cat in CATEGORY_ORDER}
+    buckets = []  # list[{date, env}]
+    date_idx = {}
+    env_by_date = {}
+    leftover_by_cat = defaultdict(list)
+
+    for (cat, fl), items in cf_groups.items():
+        items.sort(key=lambda x: (
+        int(re.search(r"\d+", x["name"]).group()) if re.search(r"\d+", x["name"]) else 10 ** 9, x["name"]))
+        plan_for_cat = plan_dict.get(cat, {})
+        plan = plan_for_cat.get(fl) or plan_for_cat.get("*")
+        if not plan:
+            leftover_by_cat[cat].extend(items)
+            continue
+        for date, env, slice_items in _distribute_by_dates(items, plan):
+            if not slice_items:
+                continue
+            if date not in date_idx:
+                date_idx[date] = len(buckets)
+                buckets.append({"date": date, "env": env})
+                env_by_date[date] = env
+            elif env_by_date[date] != env:
+                print(f"⚠️ {date} 环境温度不一致，使用首次输入的 {env_by_date[date]}")
+            idx = date_idx[date]
+            blocks_by_cat_bucket[cat][idx].extend(expand_blocks(slice_items, PER_LINE_PER_BLOCK))
+
+    # —— 兜底 ——
+    left_total = sum(len(v) for v in leftover_by_cat.values())
+    if left_total:
+        print(f"⚠️ 还有 {left_total} 组未分配。")
+        ans = input("是否使用【统一日期/温度】一次性分配？(y=是 / 回车=否→回落到日期分桶)\n→ ").strip().lower()
+        if ans == "y":
+            default_entries = _prompt_dates_and_limits()
+            for cat in CATEGORY_ORDER:
+                if not leftover_by_cat.get(cat):
+                    continue
+                for date, env, slice_items in _distribute_by_dates(leftover_by_cat[cat], default_entries):
+                    if not slice_items:
+                        continue
+                    if date not in date_idx:
+                        date_idx[date] = len(buckets)
+                        buckets.append({"date": date, "env": env})
+                        env_by_date[date] = env
+                    elif env_by_date[date] != env:
+                        print(f"⚠️ {date} 环境温度不一致，使用首次输入的 {env_by_date[date]}")
+                    idx = date_idx[date]
+                    blocks_by_cat_bucket[cat][idx].extend(expand_blocks(slice_items, PER_LINE_PER_BLOCK))
+                leftover_by_cat[cat] = []
+        else:
+            grouped_left = {c: leftover_by_cat[c] for c in CATEGORY_ORDER if leftover_by_cat.get(c)}
+            if grouped_left:
+                buckets2 = prompt_date_buckets(list(grouped_left.keys()))
+                later_first = prompt_bucket_priority()
+                cat_byb, remain_by_cat = assign_by_buckets(grouped_left, buckets2, later_first)
+                ok, auto_last = preview_buckets_generic(cat_byb, remain_by_cat, buckets2, list(grouped_left.keys()))
+                if ok:
+                    if auto_last:
+                        last = len(buckets2) - 1
+                        for c in grouped_left.keys():
+                            cat_byb[c][last].extend(remain_by_cat[c])
+                            remain_by_cat[c] = []
+                    blocks_by_cat_bucket2 = expand_blocks_by_bucket(cat_byb)
+                    for i, bk in enumerate(buckets2):
+                        date, env = bk["date"], bk["env"]
+                        if date not in date_idx:
+                            date_idx[date] = len(buckets)
+                            buckets.append({"date": date, "env": env})
+                            env_by_date[date] = env
+                        elif env_by_date[date] != env:
+                            print(f"⚠️ {date} 环境温度不一致，使用首次输入的 {env_by_date[date]}")
+                        idx = date_idx[date]
+                        for c in grouped_left.keys():
+                            blocks_by_cat_bucket[c][idx].extend(blocks_by_cat_bucket2[c].get(i, []))
+                    leftover_by_cat = remain_by_cat
+                else:
+                    print("❌ 已取消兜底分配。")
+
+    unassigned = sum(len(v) for v in leftover_by_cat.values())
+
+    # —— 日期按升序排序 ——
+    order = sorted(range(len(buckets)), key=lambda i: buckets[i]["date"])
+    buckets = [buckets[i] for i in order]
+    for cat in CATEGORY_ORDER:
+        blocks_by_cat_bucket[cat] = {new_i: blocks_by_cat_bucket[cat].get(old_i, []) for new_i, old_i in
+                                     enumerate(order)}
+
+    # —— 统一写页 ——
+    cats_in_use = [c for c in CATEGORY_ORDER if blocks_by_cat_bucket[c]]
+    pages_slices_by_cat = {}
+    for cat in cats_in_use:
+        blocks_dict = {i: blocks_by_cat_bucket[cat].get(i, []) for i in range(len(buckets))}
+        pages_slices_by_cat[cat] = ensure_pages_slices_for_cat(wb, cat, blocks_dict)
+
+    target = make_target_order_generic(pages_slices_by_cat, cats_in_use)
+    for idx, name in enumerate(target):
+        cur = wb.sheetnames.index(name)
+        if cur != idx:
+            wb.move_sheet(wb[name], idx - cur)
+
+    total_blocks = 0
+    for cat in cats_in_use:
+        for i in range(len(buckets)):
+            total_blocks += len(blocks_by_cat_bucket[cat].get(i, []))
+    prog = Prog(total_blocks, "写入 Excel")
+    for i in range(len(buckets)):
+        day_pages = []
+        for cat in CATEGORY_ORDER:
+            if cat not in cats_in_use:
+                continue
+            pages = pages_slices_by_cat[cat][i]
+            blocks = blocks_by_cat_bucket[cat].get(i, [])
+            fill_blocks_to_pages(wb, pages, blocks, prog)
+            day_pages += pages
+        apply_meta_on_pages(wb, day_pages, normalize_date(buckets[i]["date"]), normalize_env(buckets[i]["env"]),
+                            auto_instrument=True)
+    prog.finish()
+
+    used_names_total = target
+    if unassigned:
+        print(f"⚠️ 未指派：{unassigned} 组")
+    enforce_mu_font(wb)
+    cleanup_unused_sheets(wb, used_names_total, bases=tuple(CATEGORY_ORDER))
+
+    dest_dir = _LAST_SRC.parent if _LAST_SRC else Path('.')
+
+    def unique_out_path(dest_dir: Path, stem: str) -> Path:
+        cand = dest_dir / f"{stem}.xlsx"
+        if not cand.exists():
+            return cand
+        i = 1
+        while True:
+            cand = dest_dir / f"{stem}({i}).xlsx"
+            if not cand.exists():
+                return cand
+            i += 1
+
+    final_path = unique_out_path(dest_dir, f"{TITLE}_报告版")
+    try:
+        wb.save(final_path)
+        print(f"✅ Excel 已保存：{final_path}")
+    except Exception as e:
+        print(f"❌ 保存失败：{e}")
+
+
+def try_handle_mode4(mode, wb, grouped, categories_present) -> bool:
+    """模式4兼容钩子。"""
+    if mode != "4":
+        return False
+    mode4_run(wb, grouped, categories_present)
+    return True
 
 # ===== 旧法子模式 =====
 def prompt_break_submode(has_gz, has_gl):
@@ -1288,6 +1705,8 @@ def main():
     # 1) Word 路径
     src = prompt_path("📂 请输入 Word 源路径", WORD_SRC_DEFAULT)
     print(f"✅ 使用 Word：{src}")
+    global _LAST_SRC
+    _LAST_SRC = src
 
     # 2) 解析 Word（带进度）
 
@@ -1325,6 +1744,9 @@ def main():
 
     # 6) 模式
     mode = prompt_mode()
+
+    if try_handle_mode4(mode, wb, grouped, categories_present):
+        return
 
 
     if mode == "2":
