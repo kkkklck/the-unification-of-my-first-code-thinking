@@ -62,6 +62,68 @@ CATEGORY_ORDER = ["钢柱", "钢梁", "支撑", "其他"]
 # 支撑分桶策略："number"=按编号，"floor"=按楼层；仅本次运行生效
 support_bucket_strategy = None
 
+# === 通用输入封装 ===
+
+class BackStep(Exception):
+    """用户输入 q 请求返回上一步。"""
+    pass
+
+
+class AbortToPath(Exception):
+    """用户主动中断当前模式并返回路径输入。"""
+    pass
+
+
+def ask(prompt: str, allow_empty: bool = True, lower: bool = False) -> str:
+    """统一的控制台输入函数。
+
+    参数:
+        prompt: 提示字符串。
+        allow_empty: 是否允许空输入；False 时会重复询问。
+        lower: 返回值是否小写化。
+
+    返回:
+        用户输入的字符串（可小写化）。
+
+    特殊:
+        输入 ``q`` 将触发 :class:`BackStep` 异常。
+        仅识别小写 ``q``，大写 ``Q`` 在此阶段视为普通字符。
+    """
+    while True:
+        raw = input(f"{prompt}\n→ ").strip()
+        if raw == "q":
+            raise BackStep()
+        if not allow_empty and raw == "":
+            continue
+        return raw.lower() if lower else raw
+
+
+def show_help_browser():
+    """帮助浏览器包装。"""
+    tutorial_browser()
+
+
+def ask_path() -> str | None:
+    """顶层路径输入。
+
+    返回 ``None`` 表示用户查看帮助后继续；
+    返回 ``"__QUIT__"`` 表示用户请求退出程序；
+    其他返回值为用户输入的路径字符串。
+    """
+    raw = input("📂 请输入 Word 源路径（输入 help 查看教程 / Q 退出）\n→ ").strip()
+    if raw == "help":
+        show_help_browser()
+        return None
+    if raw == "Q":
+        return "__QUIT__"
+    return raw
+
+
+def is_valid_path(p: str) -> bool:
+    """简单校验路径是否存在。"""
+    path_obj = Path(p.strip('"'))
+    return path_obj.exists() and path_obj.is_file()
+
 # ===== Word 汇总生成 =====
 NEED_COLS = 11
 MIN_ROWS_EACH = 5
@@ -1088,7 +1150,7 @@ def prompt_path(prompt, default: Path) -> Path:
         Path: 经过验证的有效文件路径
     """
     while True:
-        raw = input(f"{prompt}（回车默认：{default}）\n→ ").strip()
+        raw = ask(f"{prompt}（回车默认：{default}）")
         if raw.lower() == "help":
             tutorial_browser()
             continue
@@ -1109,7 +1171,7 @@ def prompt_floor_breaks(label: str):
     Returns:
         list[int]: 排序后的楼层断点列表（空列表表示不分段）
     """
-    txt = input(f"{label} 断点楼层（空格分隔，如 5 10；回车=不分段）：\n→ ").strip()
+    txt = ask(f"{label} 断点楼层（空格分隔，如 5 10；回车=不分段）：")
     if not txt: return []
     try:
         return sorted({int(x) for x in txt.split()})
@@ -1226,20 +1288,8 @@ def _match_keywords(name: str, kws):
     return any(k.lower() in s for k in kws)
 
 def prompt_mode():
-    """
-    交互式选择数据处理模式，返回用户选择的模式编号。
-
-    提供四种模式选项：
-    1. 日期分桶模式（按日期分配数据）
-    2. 楼层断点模式（兼容旧流程）
-    3. 简单模式（单日期/温度，不分段）
-    4. 楼层+日期配额模式
-    支持回车默认选择模式1。
-
-    Returns:
-        str: 模式编号（"1"|"2"|"3"|"4"）
-    """
-    txt = input("模式选择：1) 按日期分桶  2) 按楼层断点  3) 单日模式  4) 楼层+日期配额\n→ ").strip()
+    """模式选择，支持 q 返回。"""
+    txt = ask("模式选择：1) 按日期分桶  2) 按楼层断点  3) 单日模式  4) 楼层+日期配额")
     if txt in ("", "1"):
         return "1"
     if txt in ("2", "3", "4"):
@@ -1247,15 +1297,8 @@ def prompt_mode():
     return "1"
 
 def prompt_bucket_priority():
-    """
-    询问用户规则重叠时是否按“后定义的日期桶”优先处理。
-
-    支持回车默认“是”（后定义桶优先），输入“n”则关闭该功能。
-
-    Returns:
-        bool: 后定义桶优先返回True，否则返回False
-    """
-    ans = input("规则重叠将按【后面的天】优先并自动做差（回车=是 / n=否）：\n→ ").strip().lower()
+    """询问规则重叠优先级。"""
+    ans = ask("规则重叠将按【后面的天】优先并自动做差（回车=是 / n=否）：", lower=True)
     return ans != 'n'
 
 
@@ -1263,7 +1306,7 @@ def prompt_support_strategy_for_bucket():
     """在需要支撑分桶策略时询问一次。"""
     global support_bucket_strategy
     if support_bucket_strategy is None:
-        ans = input("支撑分桶方式：1) 按编号 2) 按楼层（回车=1）\n→ ").strip()
+        ans = ask("支撑分桶方式：1) 按编号 2) 按楼层（回车=1）")
         support_bucket_strategy = "floor" if ans == "2" else "number"
     return support_bucket_strategy
 
@@ -1284,7 +1327,7 @@ def prompt_date_buckets(categories_present):
         list[dict]: 日期桶配置列表，每个元素含日期、环境、规则等信息
     """
     while True:
-        n_txt = input("共有几天（1-10，回车=1）：\n→ ").strip()
+        n_txt = ask("共有几天（1-10，回车=1）：")
         if not n_txt: n = 1; break
         if n_txt.isdigit() and 1 <= int(n_txt) <= 10:
             n = int(n_txt); break
@@ -1292,21 +1335,21 @@ def prompt_date_buckets(categories_present):
     buckets = []
     for i in range(1, n+1):
         print(f"\n—— 第 {i} 天 ——")
-        d = input("📅 日期（20250101 / 2025年1月1日 / 2025 1 1 / 2025.1.1 / 2025-1-1 / 1-1 / 01-01）：\n→ ").strip()
-        e = input("🌡 环境温度（24 / 24℃ / 24 度 / 24 C）：\n→ ").strip()
+        d = ask("📅 日期（20250101 / 2025年1月1日 / 2025 1 1 / 2025.1.1 / 2025-1-1 / 1-1 / 01-01）：")
+        e = ask("🌡 环境温度（24 / 24℃ / 24 度 / 24 C）：")
         rules = {}
         for cat in categories_present:
             if cat == "支撑":
                 prompt_support_strategy_for_bucket()
                 if support_bucket_strategy == "floor":
-                    txt = input("🦾 支撑 楼层规则（例：1-3 5 7-10 屋面；留空=不接收；*=不限）：\n→ ").strip()
+                    txt = ask("🦾 支撑 楼层规则（例：1-3 5 7-10 屋面；留空=不接收；*=不限）：")
                 else:
-                    txt = input("🦾 支撑 编号范围（例：1-12 20-25；留空=不接收；*=不限）：\n→ ").strip()
-                rules[cat] = parse_rule(txt)
+                    txt = ask("🦾 支撑 编号范围（例：1-12 20-25；留空=不接收；*=不限）：")
+                    rules[cat] = parse_rule(txt)
             else:
-                txt = input(f"🏗 {cat} 楼层规则（例：1-3 5 7-10 屋面；留空=不接收；*=不限）：\n→ ").strip()
+                txt = ask(f"🏗 {cat} 楼层规则（例：1-3 5 7-10 屋面；留空=不接收；*=不限）：")
                 rules[cat] = parse_rule(txt)
-        kws_txt = input("🔎 关键词（可多个，空格/逗号分隔；留空=无需）：\n→ ").strip()
+        kws_txt = ask("🔎 关键词（可多个，空格/逗号分隔；留空=无需）：")
         buckets.append({
             "date_raw": d,
             "date": normalize_date(d) if d else "",
@@ -1394,7 +1437,7 @@ def preview_buckets_generic(cat_byb, remain_by_cat, buckets, categories_present)
     if any(remain_by_cat[cat] for cat in categories_present):
         print("  ⚠️ 未分配：", end="")
         print("、".join(f"{cat} {len(remain_by_cat[cat])}" for cat in categories_present if remain_by_cat[cat]))
-    ans = input("确认生成吗？(回车=是 / n=否 / a=把未分配并入最后一天)：\n→ ").strip().lower()
+    ans = ask("确认生成吗？(回车=是 / n=否 / a=把未分配并入最后一天)：", lower=True)
     return (ans != "n"), (ans == "a")
 
 def expand_blocks_by_bucket(cat_byb):
@@ -1566,10 +1609,10 @@ def _distribute_by_dates(items, date_entries):
 def _prompt_dates_and_limits():
     """交互获取日期、每日数量及环境温度。"""
     while True:
-        txt = input(
+        txt = ask(
             "日期（空格/逗号分隔；支持 20250101 / 2025年1月1日 / 2025 1 1 / 2025.1.1 / 2025-1-1 / 1-1 / 01-01，\n"
             "年份默认取首个日期的年或当前年）：例如 2025-08-27 8-28 2025年1月1日\n→ "
-        ).strip()
+        )
         if any(ch in txt for ch in "；;，、/\\|"):
             print("只接受逗号或空格分隔，请重输。")
             continue
@@ -1581,7 +1624,7 @@ def _prompt_dates_and_limits():
             print("已忽略：" + "、".join(ig))
         break
     while True:
-        txt = input("每日数量（按日期顺序；空=均分；填整数=配额）\n→ ").strip()
+        txt = ask("每日数量（按日期顺序；空=均分；填整数=配额）\n→ ")
         if txt == "":
             limits = [None] * len(dates)
             break
@@ -1596,7 +1639,7 @@ def _prompt_dates_and_limits():
         print(f"请输入{len(dates)}个正整数或留空。")
     envs = []
     for d in dates:
-        envs.append(input(f"{d} 的环境温度（回车=不写）：\n→ ").strip())
+        envs.append(ask(f"{d} 的环境温度（回车=不写）：\n→ "))
     return list(zip(dates, limits, envs))
 
 
@@ -1630,7 +1673,7 @@ def _prompt_plan_for_floors(floors, shared=True):
         print("已识别楼层：" + " ".join(floors))
     # Step1 楼层
     while True:
-        txt = input("适用楼层（回车=全部）：示例 5F, 6F, B2, 屋面 或 5 6 B2\n→ ").strip()
+        txt = ask("适用楼层（回车=全部）：示例 5F, 6F, B2, 屋面 或 5 6 B2\n→ ")
         if any(ch in txt for ch in "；;，、/\\|"):
             print("只接受逗号或空格分隔，请重输。")
             continue
@@ -1677,7 +1720,7 @@ def prompt_mode4_plan(floors_by_cat, categories_present):
         if not fls:
             continue
         print(f"\n[{cat}]")
-        share = input("这些楼层用同一套日期/数量吗？（y=是，回车=分别设置）\n→ ").strip().lower() == "y"
+        share = ask("这些楼层用同一套日期/数量吗？（y=是，回车=分别设置）\n→ ") == "y"
         plans[cat] = _prompt_plan_for_floors(fls, shared=share)
             # —— 新增：给未指定楼层兜底 ——
         all_floors = sorted(floors_by_cat.get(cat, set()), key=_floor_sort_key_by_label)
@@ -1686,9 +1729,10 @@ def prompt_mode4_plan(floors_by_cat, categories_present):
         if "*" not in plan_for_cat and len(specified) < len(all_floors):
             miss = [f for f in all_floors if f not in specified]
             print(f"👉 {cat} 还有未配置楼层：{' '.join(miss)}")
-            ans = input(
-                    "要不要给“未配置”的楼层用一套通用的日期/数量？（y=是，回车=跳过；未配置的楼层稍后会再统一询问或回落到日期分桶）\n→ "
-            ).strip().lower()
+            ans = ask(
+                    "要不要给“未配置”的楼层用一套通用的日期/数量？（y=是，回车=跳过；未配置的楼层稍后会再统一询问或回落到日期分桶）",
+                    lower=True
+            )
             if ans == "y":
                     plan_for_cat["*"] = _prompt_dates_and_limits()
         _summarize_plan(cat, plan_for_cat, all_floors)
@@ -1736,7 +1780,7 @@ def mode4_run(wb, grouped, categories_present):
     left_total = sum(len(v) for v in leftover_by_cat.values())
     if left_total:
         print(f"⚠️ 还有 {left_total} 组未分配。")
-        ans = input("是否给未指定楼层套用【默认日期/数量/温度】？(y=是 / 回车=否→回落到日期分桶)\n→ ").strip().lower()
+        ans = ask("是否给未指定楼层套用【默认日期/数量/温度】？(y=是 / 回车=否→回落到日期分桶)", lower=True)
         if ans == "y":
             default_entries = _prompt_dates_and_limits()
             for cat in CATEGORY_ORDER:
@@ -1874,39 +1918,26 @@ def prompt_break_submode(has_gz, has_gl):
         str: 子模式编号（"1"|"2"|"3"）
     """
     if has_gz and has_gl:
-        t = input("断点子模式：1) 柱梁共用断点（简便）  2) 柱梁分别断点  3) 无断点（整单同一天）\n→ ").strip()
+        t = ask("断点子模式：1) 柱梁共用断点（简便）  2) 柱梁分别断点  3) 无断点（整单同一天）")
         return t if t in ("1","2","3") else "1"
     else:
-        t = input("断点子模式：仅存在单类（或加“其他”） → 3) 无断点  或  2) 分别断点（按各自断点）\n→ ").strip()
+        t = ask("断点子模式：仅存在单类（或加“其他”） → 3) 无断点  或  2) 分别断点（按各自断点）")
         return t if t in ("2","3") else "3"
 
 # ===== 主流程 =====
-def main():
-    """
-    程序主流程：协调各模块完成从数据提取到报告生成的全流程。
-
-    核心步骤：
-    1. 读取Word数据并生成汇总表
-    2. 按构件类型分类数据
-    3. 根据用户选择的模式（日期分桶/楼层断点/简单模式）处理数据
-    4. 自动生成Excel报告（含格式调整、仪器识别）
-    5. 清理冗余工作表并保存结果
-    全程带进度提示和用户交互，确保流程清晰可追溯。
-    """
-    print(f" {TITLE} — {VERSION}")
-    # 1) Word 路径
-    src = prompt_path("📂 请输入 Word 源路径", WORD_SRC_DEFAULT)
+def run_mode(mode: str, path: str | Path):
+    """按指定模式执行一次导出。"""
+    src = Path(path)
     print(f"✅ 使用 Word：{src}")
     global _LAST_SRC, support_bucket_strategy
     _LAST_SRC = src
     support_bucket_strategy = None
 
-    # 2) 解析 Word（带进度）
-
+    # 解析 Word（带进度）
     groups_all_tables, all_rows = (lambda p: (lambda g,r:(g,r))(*read_groups_from_doc(p)))(src)
     all_groups = groups_all_tables
 
-    # 2.1 分类
+    # 分类
     grouped = defaultdict(list)
     for g in all_groups:
         grouped[kind_of(g["name"])].append(g)
@@ -1915,7 +1946,7 @@ def main():
 
     print("📊 识别： " + "、".join(f"{cat} {len(grouped.get(cat, []))}" for cat in categories_present))
 
-    # 3) 汇总 Word（固定名 + 进度）
+    # 汇总 Word（固定名 + 进度）
     doc_out = build_summary_doc_with_progress(all_rows)
     set_doc_font_progress(doc_out, DEFAULT_FONT_PT)
     out_docx = src.with_name("汇总原始记录.docx")
@@ -1923,20 +1954,17 @@ def main():
     doc_out.save(str(out_docx))
     print(f"✅ 汇总 Word 已保存：{out_docx}")
 
-    # 4) 选择模板（是否有支撑）
+    # 选择模板（是否有支撑）
     tpl_path = XLSX_WITH_SUPPORT_DEFAULT if with_support else XLSX_NO_SUPPORT_DEFAULT
     if not tpl_path.exists():
         raise FileNotFoundError(f"Excel 模板不存在：{tpl_path}")
     wb = load_workbook(tpl_path)
 
-    # 5) 工程名/委托号（全局一次）
-    proj_in  = input("🏗 工程名称（回车=不改模板）：\n→ ").strip()
-    order_in = input("🧾 委托编号（回车=不改模板）：\n→ ").strip()
+    # 工程名/委托号（全局一次）
+    proj_in  = ask("🏗 工程名称（回车=不改模板）：")
+    order_in = ask("🧾 委托编号（回车=不改模板）：")
     if proj_in or order_in:
         apply_meta_fixed(wb, categories_present, {"proj": proj_in or "", "order": order_in or ""})
-
-    # 6) 模式
-    mode = prompt_mode()
 
     if try_handle_mode4(mode, wb, grouped, categories_present):
         return
@@ -1978,8 +2006,8 @@ def main():
                     fill_blocks_to_pages(wb, pages_by_cat[cat], blocks_by_cat[cat], prog)
             prog.finish()
 
-            d = normalize_date(input("📅 整单日期（20250101 / 2025年1月1日 / 2025 1 1 / 2025.1.1 / 2025-1-1 / 1-1 / 01-01；回车=不写）：\n→ ").strip() or "")
-            e = normalize_env(input("🌡 整单环境（回车=不写）：\n→ ").strip() or "")
+            d = normalize_date(ask("📅 整单日期（20250101 / 2025年1月1日 / 2025 1 1 / 2025.1.1 / 2025-1-1 / 1-1 / 01-01；回车=不写）：") or "")
+            e = normalize_env(ask("🌡 整单环境（回车=不写）：") or "")
             apply_meta_on_pages(wb, target, d, e, auto_instrument=True)
             used_names_total = target
 
@@ -2088,8 +2116,8 @@ def main():
                 fill_blocks_to_pages(wb, pages_by_cat[cat], blocks_by_cat[cat], prog)
         prog.finish()
 
-        d = normalize_date(input("📅 日期：20250101 / 2025年1月1日 / 2025 1 1 / 2025.1.1 / 2025-1-1 / 1-1 / 01-01；（回车=不写）：\n→ ").strip() or "")
-        e = normalize_env(input("🌡 环境温度（回车=不写）：\n→ ").strip() or "")
+        d = normalize_date(ask("📅 日期：20250101 / 2025年1月1日 / 2025 1 1 / 2025.1.1 / 2025-1-1 / 1-1 / 01-01；（回车=不写）：") or "")
+        e = normalize_env(ask("🌡 环境温度（回车=不写）：") or "")
         apply_meta_on_pages(wb, target, d, e, auto_instrument=True)
         used_names_total = target
 
@@ -2163,6 +2191,32 @@ def main():
         print(f"✅ Excel 已保存：{final_path}")
     except Exception as e:
         print(f"❌ 保存失败：{e}")
+
+
+# ===== 顶层交互循环 =====
+def main():
+    print(f" {TITLE} — {VERSION}")
+    while True:
+        path = ask_path()
+        if path is None:
+            continue
+        if path == "__QUIT__":
+            print("Bye")
+            break
+        if not is_valid_path(path):
+            print("× 路径无效。输入有效路径或输入 help 查看教程。")
+            continue
+        try:
+            mode = prompt_mode()
+            run_mode(mode, path)
+            print("✔ 完成。本次导出结束。")
+        except BackStep:
+            pass
+        except Exception as e:
+            print(f"× 出错：{e}")
+        finally:
+            continue
+
 
 # ===== 读取 Word 分组 =====
 def read_groups_from_doc(path: Path):
