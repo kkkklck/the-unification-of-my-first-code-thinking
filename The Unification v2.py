@@ -59,6 +59,9 @@ BLOCKS_PER_SHEET   = 5
 # 打印顺序：可自行调整位置
 CATEGORY_ORDER = ["钢柱", "钢梁", "支撑", "其他"]
 
+# 支撑分桶策略："number"=按编号（默认），"floor"=按楼层
+support_bucket_strategy = "number"
+
 # ===== Word 汇总生成 =====
 NEED_COLS = 11
 MIN_ROWS_EACH = 5
@@ -1122,7 +1125,10 @@ def prompt_date_buckets(categories_present):
         rules = {}
         for cat in categories_present:
             if cat == "支撑":
-                txt = input("🦾 支撑 编号范围（例：1-12 20-25；留空=不接收；*=不限）：\n→ ").strip()
+                if support_bucket_strategy == "floor":
+                    txt = input("🦾 支撑 楼层规则（例：1-3 5 7-10 屋面；留空=不接收；*=不限）：\n→ ").strip()
+                else:
+                    txt = input("🦾 支撑 编号范围（例：1-12 20-25；留空=不接收；*=不限）：\n→ ").strip()
                 rules[cat] = parse_rule(txt)
             else:
                 txt = input(f"🏗 {cat} 楼层规则（例：1-3 5 7-10 屋面；留空=不接收；*=不限）：\n→ ").strip()
@@ -1164,7 +1170,7 @@ def assign_by_buckets(cat_groups: dict, buckets, later_priority=True):
         for idx, g in enumerate(groups):
             # 计算匹配
             fl = floor_of(g["name"])
-            wzno = _wz_no(g["name"]) if cat == "支撑" else None
+            wzno = _wz_no(g["name"]) if cat == "支撑" and support_bucket_strategy == "number" else None
             for bi in order:
                 b = buckets[bi]
                 rule = b["rules"].get(cat, {"enabled": False, "ranges": None})
@@ -1172,9 +1178,12 @@ def assign_by_buckets(cat_groups: dict, buckets, later_priority=True):
                     continue
                 ok = False  # noqa
                 if cat == "支撑":
-                    rng = rule["ranges"]
-                    ok_num = True if rng == [] else (wzno is not None and _in_ranges(wzno, rng))
-                    ok = ok_num
+                    if support_bucket_strategy == "number":
+                        rng = rule["ranges"]
+                        ok_num = True if rng == [] else (wzno is not None and _in_ranges(wzno, rng))
+                        ok = ok_num
+                    else:
+                        ok = _in_ranges(fl, rule["ranges"])
                 else:
                     ok = _in_ranges(fl, rule["ranges"])
                 if ok and _match_keywords(g["name"], b["kws"]):
@@ -1385,7 +1394,8 @@ def _prompt_dates_and_limits():
     """交互获取日期、每日数量及环境温度。"""
     while True:
         txt = input(
-            "日期（用空格或逗号分隔；允许 YYYY-MM-DD 或 MM-DD，年份默认取首个日期的年或当前年）：例如 2025-08-27 8-28 8-29\n→ "
+            "日期（空格/逗号分隔；支持 YYYY-MM-DD / MM-DD / 20250101 / 2025年1月1日 / 2025 1 1 / 2025.1.1，\n"
+            "年份默认取首个日期的年或当前年）：例如 2025-08-27 8-28 2025年1月1日\n→ "
         ).strip()
         if any(ch in txt for ch in "；;，、/\\|"):
             print("只接受逗号或空格分隔，请重输。")
@@ -1544,7 +1554,7 @@ def mode4_run(wb, grouped, categories_present):
     left_total = sum(len(v) for v in leftover_by_cat.values())
     if left_total:
         print(f"⚠️ 还有 {left_total} 组未分配。")
-        ans = input("是否使用【统一日期/温度】一次性分配？(y=是 / 回车=否→回落到日期分桶)\n→ ").strip().lower()
+        ans = input("是否给未指定楼层套用【默认日期/数量/温度】？(y=是 / 回车=否→回落到日期分桶)\n→ ").strip().lower()
         if ans == "y":
             default_entries = _prompt_dates_and_limits()
             for cat in CATEGORY_ORDER:
@@ -1705,7 +1715,7 @@ def main():
     # 1) Word 路径
     src = prompt_path("📂 请输入 Word 源路径", WORD_SRC_DEFAULT)
     print(f"✅ 使用 Word：{src}")
-    global _LAST_SRC
+    global _LAST_SRC, support_bucket_strategy
     _LAST_SRC = src
 
     # 2) 解析 Word（带进度）
@@ -1748,6 +1758,11 @@ def main():
     if try_handle_mode4(mode, wb, grouped, categories_present):
         return
 
+    # 支撑分桶策略选择
+    support_bucket_strategy = "number"
+    if with_support and mode in ("1", "2", "3"):
+        ans = input("支撑分桶方式：1) 按编号 2) 按楼层（回车=1）\n→ ").strip()
+        support_bucket_strategy = "floor" if ans == "2" else "number"
 
     if mode == "2":
         # —— 旧法：断点 ——
@@ -1799,7 +1814,10 @@ def main():
             breaks_by_cat = {}
             for cat in categories_present:
                 if cat == "支撑":
-                    breaks_by_cat[cat] = []   # 支撑不做断点分段
+                    if support_bucket_strategy == "floor":
+                        breaks_by_cat[cat] = prompt_floor_breaks(cat)
+                    else:
+                        breaks_by_cat[cat] = []   # 支撑不做断点分段
                 elif cat in ("钢柱","钢梁") and same_breaks is not None:
                     breaks_by_cat[cat] = same_breaks
                 else:
@@ -1808,7 +1826,7 @@ def main():
             # 分段
             byseg = {cat: defaultdict(list) for cat in categories_present}
             for cat in categories_present:
-                if cat == "支撑":
+                if cat == "支撑" and support_bucket_strategy != "floor":
                     byseg[cat][0] = blocks_by_cat[cat]
                 else:
                     for b in blocks_by_cat[cat]:
