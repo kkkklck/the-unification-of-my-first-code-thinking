@@ -1077,7 +1077,6 @@ def _parse_dates_simple(input_str: str):
             # 记录无法解析的原始 token（或组合）
             ignored.extend(tokens[i:i + consumed])
 
-        # 别忘了移动游标（这是保证不会死循环的关键）
         i += consumed
 
     return res, ignored
@@ -2351,3 +2350,4 @@ if __name__ == "__main__":
     main()
 
                                                                                                         # v4.2.2
+
