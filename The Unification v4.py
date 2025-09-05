@@ -29,12 +29,11 @@
 
 
 from pathlib import Path
-import re, copy, math, warnings, sys
+import re, copy, math, warnings, sys, os, unicodedata
 from collections import defaultdict
 from datetime import datetime
 from docx import Document
 from docx.shared import RGBColor, Pt
-from openpyxl import load_workbook
 from openpyxl.styles import Font, Alignment
 
 # made by lck, an intern of this company in 2025 summer
@@ -42,12 +41,13 @@ from openpyxl.styles import Font, Alignment
 warnings.filterwarnings("ignore", category=SyntaxWarning)
 
 TITLE   = "The Unification"
-VERSION = "v 3.1.2"
+VERSION = "v 4.2.2"
+AUTHOR = "LCK"
 
 # ===== 默认路径 =====
 WORD_SRC_DEFAULT = Path(r"D:\eg\eg.docx")
-XLSX_WITH_SUPPORT_DEFAULT = Path(r"E:\公司尝试\防火原始文件\防火２有支撑版.xlsx")
-XLSX_NO_SUPPORT_DEFAULT   = Path(r"E:\公司尝试\防火原始文件\防火２无支撑版.xlsx")
+XLSX_WITH_SUPPORT_DEFAULT = Path(r"D:\防火原始文件\防火２有支撑版.xlsx")
+XLSX_NO_SUPPORT_DEFAULT   = Path(r"D:\防火原始文件\防火２无支撑版.xlsx")
 DEFAULT_FONT_PT = 9
 
 # 每页 5 组、每组 5 行、每行 8 读数+平均值
@@ -116,11 +116,50 @@ def ask_path() -> str | None:
         return "__QUIT__"
     return raw
 
-
 def is_valid_path(p: str) -> bool:
     """简单校验路径是否存在。"""
     path_obj = Path(p.strip('"'))
     return path_obj.exists() and path_obj.is_file()
+
+# ---- 文件占用友好提示封装 ----
+class FileInUse(Exception):
+    pass
+
+def _is_in_use_error(e: Exception) -> bool:
+    # Windows 常见：WinError 32（共享冲突），或 PermissionError 13
+    msg = str(e).lower()
+    code32 = getattr(e, "winerror", None) == 32
+    perm13 = isinstance(e, PermissionError)
+    hit_msg = ("being used by another process" in msg or
+               "used by another process" in msg or
+               "permission denied" in msg)
+    return bool(code32 or perm13 or hit_msg)
+
+def load_workbook_safe(path, **kw):
+    from openpyxl import load_workbook
+    try:
+        return load_workbook(path, **kw)
+    except Exception as e:
+        if _is_in_use_error(e):
+            raise FileInUse(f"Excel 模板/文件被占用：{path}") from e
+        raise
+
+def save_workbook_safe(wb, path):
+    try:
+        wb.save(path)
+    except Exception as e:
+        if _is_in_use_error(e):
+            raise FileInUse(f"无法保存 Excel（被占用）：{path}") from e
+        raise
+
+def save_docx_safe(doc, path):
+    try:
+        doc.save(str(path))
+    except Exception as e:
+        if _is_in_use_error(e):
+            raise FileInUse(f"无法保存 Word（被占用）：{path}") from e
+        raise
+
 
 # ===== Word 汇总生成 =====
 NEED_COLS = 11
@@ -976,8 +1015,9 @@ def _parse_dates_simple(input_str: str):
         return res, ignored
 
     # ===== 交互 =====
-HELP_HOME = """====================  The Unification | 帮助中心  ====================
-
+HELP_HOME = f"""
+====================  The Unification | 帮助中心  ====================
+this application was made by {AUTHOR} in 2025 summer
 使用方式：
   • 在“请输入 Word 源路径”处，输入 help 打开本帮助中心
   • 在本界面输入 1 / 2 / 3 / 4 查看对应模式的完整教程
@@ -1583,7 +1623,6 @@ def cleanup_unused_sheets(wb, used_names, bases=("钢柱","钢梁","支撑","其
     for ws in to_remove:
         wb.remove(ws)
 
-
 def _distribute_by_dates(items, date_entries):
     """按日期列表将项目分配到各天。"""
     res = []
@@ -1611,7 +1650,6 @@ def _distribute_by_dates(items, date_entries):
             res.append((d, env, items[cursor:cursor + take]))
             cursor += take
     return res
-
 
 def _prompt_dates_and_limits():
     """交互获取日期、每日数量及环境温度。"""
@@ -1649,7 +1687,6 @@ def _prompt_dates_and_limits():
         envs.append(ask(f"{d} 的环境温度（回车=不写）：\n→ "))
     return list(zip(dates, limits, envs))
 
-
 def _summarize_plan(tag, plan, all_floors=None):
     """输出楼层计划摘要，便于用户确认。"""
 
@@ -1671,7 +1708,6 @@ def _summarize_plan(tag, plan, all_floors=None):
         if miss:
             miss_txt = " ".join(sorted(miss, key=_floor_sort_key_by_label))
             print(f"未覆盖的楼层：{miss_txt} （稍后统一处理/回落到日期分桶）")
-
 
 def _prompt_plan_for_floors(floors, shared=True):
     """针对给定楼层集合交互生成计划。"""
@@ -1714,7 +1750,6 @@ def _prompt_plan_for_floors(floors, shared=True):
         plan[f] = _prompt_dates_and_limits()
     return plan
 
-
 def prompt_mode4_plan(floors_by_cat, categories_present):
     """模式4交互，分别为各类别获取楼层计划。"""
     print("各类别楼层：")
@@ -1744,7 +1779,6 @@ def prompt_mode4_plan(floors_by_cat, categories_present):
                     plan_for_cat["*"] = _prompt_dates_and_limits()
         _summarize_plan(cat, plan_for_cat, all_floors)
     return plans
-
 
 def mode4_run(wb, grouped, categories_present):
     """执行模式4：按楼层和日期写入Excel。"""
@@ -1840,8 +1874,7 @@ def mode4_run(wb, grouped, categories_present):
     order = sorted(range(len(buckets)), key=lambda i: buckets[i]["date"])
     buckets = [buckets[i] for i in order]
     for cat in CATEGORY_ORDER:
-        blocks_by_cat_bucket[cat] = {new_i: blocks_by_cat_bucket[cat].get(old_i, []) for new_i, old_i in
-                                     enumerate(order)}
+        blocks_by_cat_bucket[cat] = {new_i: blocks_by_cat_bucket[cat].get(old_i, []) for new_i, old_i in enumerate(order)}
 
     # —— 统一写页 ——
     cats_in_use = [c for c in CATEGORY_ORDER if blocks_by_cat_bucket[c]]
@@ -2125,20 +2158,25 @@ def prepare_from_word(src: Path):
         grouped[kind_of(g["name"])].append(g)
     categories_present = [cat for cat in CATEGORY_ORDER if grouped.get(cat)]
     print("📊 识别： " + "、".join(f"{cat} {len(grouped.get(cat, []))}" for cat in categories_present))
+
     doc_out = build_summary_doc_with_progress(all_rows)
     set_doc_font_progress(doc_out, DEFAULT_FONT_PT)
     out_docx = src.with_name("汇总原始记录.docx")
     print("💾 正在保存汇总 Word …")
-    doc_out.save(str(out_docx))
+
+    save_docx_safe(doc_out, out_docx)
     print(f"✅ 汇总 Word 已保存：{out_docx}")
     return grouped, categories_present
+
 
 
 def run_with_mode(src: Path, grouped, categories_present, meta):
     tpl_path = XLSX_WITH_SUPPORT_DEFAULT if "支撑" in categories_present else XLSX_NO_SUPPORT_DEFAULT
     if not tpl_path.exists():
         raise FileNotFoundError(f"Excel 模板不存在：{tpl_path}")
-    wb = load_workbook(tpl_path)
+
+    wb = load_workbook_safe(tpl_path)
+
     try:
         mode = prompt_mode()
         used_names_total = run_mode(mode, wb, grouped, categories_present)
@@ -2161,11 +2199,11 @@ def run_with_mode(src: Path, grouped, categories_present, meta):
             i += 1
 
     final_path = unique_out_path(src.parent, f"{TITLE}_报告版")
-    wb.save(final_path)
+    save_workbook_safe(wb, final_path)
     print(f"✅ Excel 已保存：{final_path}")
     print("✔ 完成。本次导出结束。")
 
-    # ===== 顶层交互循环 =====
+# ===== 顶层交互循环 =====
 def main():
     print(f" {TITLE} — {VERSION}")
     while True:
@@ -2183,15 +2221,28 @@ def main():
             print(f"✅ 使用 Word：{src}")
             global support_bucket_strategy
             support_bucket_strategy = None
+
             grouped, categories_present = prepare_from_word(src)
+
             proj = ask("工程名称（回车可空）：")
             order = ask("委托编号（回车可空）：")
             meta = {"proj": proj or "", "order": order or ""}
+
             run_with_mode(src, grouped, categories_present, meta)
-        except Exception as e:
-            print(f"× 出错：{e}")
-        finally:
+
+        except FileInUse as e:
+            # ↓↓↓ 友好提示，不打印堆栈，不吓用户
+            print("\n⚠️  文件被占用，无法读写：")
+            print(f"   - {e}")
+            print("✅  请关闭相关的 Excel / Word / 预览窗口（含资源管理器预览窗格），然后重新运行本程序。\n")
+            # 直接回到主循环
             continue
+
+        except Exception as e:
+            # 其他异常仍提示，但不长篇堆栈
+            print(f"× 出错：{e}")
+            continue
+
 
 
 
@@ -2230,4 +2281,4 @@ def read_groups_from_doc(path: Path):
 if __name__ == "__main__":
     main()
 
-                                                                                                        # v4.1.2
+                                                                                                        # v4.2.2
