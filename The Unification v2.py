@@ -12,8 +12,8 @@
 # pip install openpyxl python-docx -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 # 3. 系统兼容性：支持 Windows、macOS、Linux 系统，文件路径需按系统格式填写：
-# - Windows 路径示例：E:\ 公司尝试 \2025-037113\2025-037113 - 西井 6# 楼 - 宋 714 测点（我的）.docx
-# - macOS/Linux 路径示例：/Users/ 用户名 / 公司尝试 / 防火原始文件 / 防火２有支撑版.xlsx
+# - Windows 路径示例：E:\eg\文件夹\eg.docx
+# - macOS/Linux 路径示例：/Users/用户名/eg/文件夹/防火２有支撑版.xlsx
 
 # 4. 注意事项：
 # - Word 源文件需为 .docx 格式，数据需存储在含 “测点 1”“平均值” 关键词的表格中（程序仅识别此类表格）
@@ -44,13 +44,11 @@ warnings.filterwarnings("ignore", category=SyntaxWarning)
 TITLE   = "The Unification"
 VERSION = "v 3.1.2"
 
-# ===== 默认路径（自己改成你的默认值即可）=====
+# ===== 默认路径 =====
 WORD_SRC_DEFAULT = Path(r"D:\eg\eg.docx")
 XLSX_WITH_SUPPORT_DEFAULT = Path(r"E:\公司尝试\防火原始文件\防火２有支撑版.xlsx")
 XLSX_NO_SUPPORT_DEFAULT   = Path(r"E:\公司尝试\防火原始文件\防火２无支撑版.xlsx")
 DEFAULT_FONT_PT = 9
-
-_LAST_SRC = None  # 记录当前Word路径，供模式4保存Excel
 
 # 每页 5 组、每组 5 行、每行 8 读数+平均值
 PER_LINE_PER_BLOCK = 5
@@ -978,6 +976,34 @@ def _parse_dates_simple(input_str: str):
         return res, ignored
 
     # ===== 交互 =====
+HELP_HOME = """====================  The Unification | 帮助中心  ====================
+
+使用方式：
+  • 在“请输入 Word 源路径”处，输入 help 打开本帮助中心
+  • 在本界面输入 1 / 2 / 3 / 4 查看对应模式的完整教程
+  • 直接回车 返回到路径输入界面
+  • 在任何步骤输入小写 q 可返回上一步；仅在路径输入界面输入大写 Q 退出程序
+
+全局规则（适用于所有模式）：
+  • 日期输入支持以下格式（可混用，自动标准化）：
+      YYYY-MM-DD / YYYY/MM/DD / YYYY.MM.DD / YYYY MM DD / YYYYMMDD
+      M-D / M/D / M.D / M D / YYYY年M月D日
+  • 温度输入：任意字符串（如 24℃ / 24.5 度），自动标准化为“X℃”或“X.X℃”
+  • “支撑（WZ）”分桶策略（仅 Mode 1/2/3）：
+      - 在进入“支撑”配置之前询问：1=按编号；2=按楼层（与钢柱/钢梁一致）
+  • 输出规则：
+      - 统一使用模板页池命名（不在 Sheet 名称中写日期/楼层）
+      - 日期写入 K33、温度写入 K34，仪器型号自动识别写入（E33:H33）
+  • 排序规则：
+      - 楼层自然顺序：B* → 1F↑ → 机房层 → 屋面
+      - 同层内：WZ编号（若有）→ 名称里的数字 → 名称字典序（稳定、可复现）
+
+提示：
+  • 任何模式完成或发生错误后，程序都会回到路径输入界面
+  • 仅当在路径输入界面输入大写 Q，程序才会退出
+=====================================================================
+"""
+
 HELP_TEXTS = {
         "1":
 """====================  Mode 1 | 按日期分桶（默认稳健）  ====================
@@ -1103,52 +1129,19 @@ HELP_TEXTS = {
     }
 
 def tutorial_browser():
-        """显示模式教程浏览器。"""
-        while True:
-            print(
-"""====================  The Unification | 帮助中心  ====================
-
-使用方式：
-  • 在“请输入 Word 源路径”处，输入 help 打开本帮助中心
-  • 在本界面输入 1 / 2 / 3 / 4 查看对应模式的完整教程
-  • 直接回车 返回到路径输入界面
-  • 在任何步骤输入小写 q 可返回上一步；仅在路径输入界面输入大写 Q 退出程序
-
-全局规则（适用于所有模式）：
-  • 日期输入支持以下格式（可混用，自动标准化）：
-      YYYY-MM-DD / YYYY/MM/DD / YYYY.MM.DD / YYYY MM DD / YYYYMMDD
-      M-D / M/D / M.D / M D / YYYY年M月D日
-  • 温度输入：任意字符串（如 24℃ / 24.5 度），自动标准化为“X℃”或“X.X℃”
-  • “支撑（WZ）”分桶策略（仅 Mode 1/2/3）：
-      - 在进入“支撑”配置之前询问：1=按编号；2=按楼层（与钢柱/钢梁一致）
-  • 输出规则：
-      - 统一使用模板页池命名（不在 Sheet 名称中写日期/楼层）
-      - 日期写入 K33、温度写入 K34，仪器型号自动识别写入（E33:H33）
-  • 排序规则：
-      - 楼层自然顺序：B* → 1F↑ → 机房层 → 屋面
-      - 同层内：WZ编号（若有）→ 名称里的数字 → 名称字典序（稳定、可复现）
-
-提示：
-  • 任何模式完成或发生错误后，程序都会回到路径输入界面
-  • 仅当在路径输入界面输入大写 Q，程序才会退出
-=====================================================================
-"""
-            )
-            sel = input("查看哪个模式的教程？输入 1/2/3/4，回车返回路径输入。\n→ ").strip()
-            if sel == "":
-                return
-            if sel in HELP_TEXTS:
-                print(HELP_TEXTS[sel])
-                break
-            print("仅接受 1/2/3/4 或回车。")
-        while True:
-            sel = input("还要查看其他模式？输入 1/2/3/4，回车返回。\n→ ").strip()
-            if sel == "":
-                return
-            if sel in HELP_TEXTS:
-                print(HELP_TEXTS[sel])
-            else:
-                print("仅接受 1/2/3/4 或回车。")
+    """显示模式教程浏览器。"""
+    print(HELP_HOME)
+    viewed = False
+    while True:
+        prompt = "还要查看其他模式？输入 1/2/3/4，回车或 q 返回。\n→ " if viewed else "查看哪个模式？输入 1/2/3/4，回车或 q 返回路径输入。\n→ "
+        sel = input(prompt).strip()
+        if sel in ("", "q"):
+            return
+        if sel in HELP_TEXTS:
+            print(HELP_TEXTS[sel])
+            viewed = True
+        else:
+            print("仅接受 1/2/3/4 或回车/q。")
 
 def prompt_path(prompt, default: Path) -> Path:
     """
@@ -1884,36 +1877,14 @@ def mode4_run(wb, grouped, categories_present):
     used_names_total = target
     if unassigned:
         print(f"⚠️ 未指派：{unassigned} 组")
-    enforce_mu_font(wb)
-    cleanup_unused_sheets(wb, used_names_total, bases=tuple(CATEGORY_ORDER))
-
-    dest_dir = _LAST_SRC.parent if _LAST_SRC else Path('.')
-
-    def unique_out_path(dest_dir: Path, stem: str) -> Path:
-        cand = dest_dir / f"{stem}.xlsx"
-        if not cand.exists():
-            return cand
-        i = 1
-        while True:
-            cand = dest_dir / f"{stem}({i}).xlsx"
-            if not cand.exists():
-                return cand
-            i += 1
-
-    final_path = unique_out_path(dest_dir, f"{TITLE}_报告版")
-    try:
-        wb.save(final_path)
-        print(f"✅ Excel 已保存：{final_path}")
-    except Exception as e:
-        print(f"❌ 保存失败：{e}")
+    return used_names_total
 
 
-def try_handle_mode4(mode, wb, grouped, categories_present) -> bool:
+def try_handle_mode4(mode, wb, grouped, categories_present) -> list | None:
     """模式4兼容钩子。"""
     if mode != "4":
-        return False
-    mode4_run(wb, grouped, categories_present)
-    return True
+        return None
+    return mode4_run(wb, grouped, categories_present)
 
 # ===== 旧法子模式 =====
 def prompt_break_submode(has_gz, has_gl):
@@ -1939,49 +1910,12 @@ def prompt_break_submode(has_gz, has_gl):
         return t if t in ("2","3") else "3"
 
 # ===== 主流程 =====
-def run_mode(mode: str, path: str | Path):
+def run_mode(mode: str, wb, grouped, categories_present):
     """按指定模式执行一次导出。"""
-    src = Path(path)
-    print(f"✅ 使用 Word：{src}")
-    global _LAST_SRC, support_bucket_strategy
-    _LAST_SRC = src
-    support_bucket_strategy = None
-
-    # 解析 Word（带进度）
-    groups_all_tables, all_rows = (lambda p: (lambda g,r:(g,r))(*read_groups_from_doc(p)))(src)
-    all_groups = groups_all_tables
-
-    # 分类
-    grouped = defaultdict(list)
-    for g in all_groups:
-        grouped[kind_of(g["name"])].append(g)
-    categories_present = [cat for cat in CATEGORY_ORDER if grouped.get(cat)]
-    with_support = "支撑" in categories_present
-
-    print("📊 识别： " + "、".join(f"{cat} {len(grouped.get(cat, []))}" for cat in categories_present))
-
-    # 汇总 Word（固定名 + 进度）
-    doc_out = build_summary_doc_with_progress(all_rows)
-    set_doc_font_progress(doc_out, DEFAULT_FONT_PT)
-    out_docx = src.with_name("汇总原始记录.docx")
-    print("💾 正在保存汇总 Word …")
-    doc_out.save(str(out_docx))
-    print(f"✅ 汇总 Word 已保存：{out_docx}")
-
-    # 选择模板（是否有支撑）
-    tpl_path = XLSX_WITH_SUPPORT_DEFAULT if with_support else XLSX_NO_SUPPORT_DEFAULT
-    if not tpl_path.exists():
-        raise FileNotFoundError(f"Excel 模板不存在：{tpl_path}")
-    wb = load_workbook(tpl_path)
-
-    # 工程名/委托号（全局一次）
-    proj_in  = ask("🏗 工程名称（回车=不改模板）：")
-    order_in = ask("🧾 委托编号（回车=不改模板）：")
-    if proj_in or order_in:
-        apply_meta_fixed(wb, categories_present, {"proj": proj_in or "", "order": order_in or ""})
-
-    if try_handle_mode4(mode, wb, grouped, categories_present):
-        return
+    global support_bucket_strategy
+    res = try_handle_mode4(mode, wb, grouped, categories_present)
+    if res is not None:
+        return res
 
     if mode == "2":
         # —— 旧法：断点 ——
@@ -2181,33 +2115,57 @@ def run_mode(mode: str, path: str | Path):
 
         used_names_total = target
 
-    # μ 字体修正
-    enforce_mu_font(wb)
+    return used_names_total
 
-    # 清理没用到的模板 sheet（含“其他”）
+    # ===== 预处理与模式运行封装 =====
+def prepare_from_word(src: Path):
+    groups_all_tables, all_rows = read_groups_from_doc(src)
+    grouped = defaultdict(list)
+    for g in groups_all_tables:
+        grouped[kind_of(g["name"])].append(g)
+    categories_present = [cat for cat in CATEGORY_ORDER if grouped.get(cat)]
+    print("📊 识别： " + "、".join(f"{cat} {len(grouped.get(cat, []))}" for cat in categories_present))
+    doc_out = build_summary_doc_with_progress(all_rows)
+    set_doc_font_progress(doc_out, DEFAULT_FONT_PT)
+    out_docx = src.with_name("汇总原始记录.docx")
+    print("💾 正在保存汇总 Word …")
+    doc_out.save(str(out_docx))
+    print(f"✅ 汇总 Word 已保存：{out_docx}")
+    return grouped, categories_present
+
+
+def run_with_mode(src: Path, grouped, categories_present, meta):
+    tpl_path = XLSX_WITH_SUPPORT_DEFAULT if "支撑" in categories_present else XLSX_NO_SUPPORT_DEFAULT
+    if not tpl_path.exists():
+        raise FileNotFoundError(f"Excel 模板不存在：{tpl_path}")
+    wb = load_workbook(tpl_path)
+    try:
+        mode = prompt_mode()
+        used_names_total = run_mode(mode, wb, grouped, categories_present)
+    except BackStep:
+        return
+
+    apply_meta_fixed(wb, categories_present, meta)
+    enforce_mu_font(wb)
     cleanup_unused_sheets(wb, used_names_total, bases=tuple(CATEGORY_ORDER))
 
-    # === 保存到 Word 同目录（不在模板目录留副本） ===
     def unique_out_path(dest_dir: Path, stem: str) -> Path:
         cand = dest_dir / f"{stem}.xlsx"
-        if not cand.exists(): return cand
+        if not cand.exists():
+            return cand
         i = 1
         while True:
             cand = dest_dir / f"{stem}({i}).xlsx"
-            if not cand.exists(): return cand
+            if not cand.exists():
+                return cand
             i += 1
 
-    base_stem = f"{TITLE}_报告版"
-    final_path = unique_out_path(src.parent, base_stem)
+    final_path = unique_out_path(src.parent, f"{TITLE}_报告版")
+    wb.save(final_path)
+    print(f"✅ Excel 已保存：{final_path}")
+    print("✔ 完成。本次导出结束。")
 
-    try:
-        wb.save(final_path)
-        print(f"✅ Excel 已保存：{final_path}")
-    except Exception as e:
-        print(f"❌ 保存失败：{e}")
-
-
-# ===== 顶层交互循环 =====
+    # ===== 顶层交互循环 =====
 def main():
     print(f" {TITLE} — {VERSION}")
     while True:
@@ -2221,15 +2179,20 @@ def main():
             print("× 路径无效。")
             continue
         try:
-            mode = prompt_mode()
-            run_mode(mode, path)
-            print("✔ 完成。本次导出结束。")
-        except BackStep:
-            pass
+            src = Path(path)
+            print(f"✅ 使用 Word：{src}")
+            global support_bucket_strategy
+            support_bucket_strategy = None
+            grouped, categories_present = prepare_from_word(src)
+            proj = ask("工程名称（回车可空）：")
+            order = ask("委托编号（回车可空）：")
+            meta = {"proj": proj or "", "order": order or ""}
+            run_with_mode(src, grouped, categories_present, meta)
         except Exception as e:
             print(f"× 出错：{e}")
         finally:
             continue
+
 
 
 # ===== 读取 Word 分组 =====
@@ -2267,4 +2230,4 @@ def read_groups_from_doc(path: Path):
 if __name__ == "__main__":
     main()
 
-                                                                                                        # v3.1.2
+                                                                                                        # v4.1.2
