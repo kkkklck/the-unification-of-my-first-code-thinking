@@ -29,7 +29,7 @@
 
 
 from pathlib import Path
-import re, copy, math, warnings, sys, os, unicodedata
+import re, copy, math, warnings, sys, os, unicodedata, ctypes
 from collections import defaultdict
 from datetime import datetime
 from docx import Document
@@ -54,6 +54,9 @@ DEFAULT_FONT_PT = 9
 PER_LINE_PER_BLOCK = 5
 BLOCKS_PER_SHEET   = 5
 
+# 本次运行只提示一次
+_hint_shown = False
+
 # 打印顺序：可自行调整位置
 CATEGORY_ORDER = ["钢柱", "钢梁", "支撑", "其他"]
 
@@ -61,6 +64,36 @@ CATEGORY_ORDER = ["钢柱", "钢梁", "支撑", "其他"]
 support_bucket_strategy = None
 
 # === 通用输入封装 ===
+
+
+def enable_ansi():
+    if os.name != "nt":
+        return True
+    k32 = ctypes.windll.kernel32
+    h = k32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+    mode = ctypes.c_uint32()
+    if not k32.GetConsoleMode(h, ctypes.byref(mode)):
+        return False
+    return bool(k32.SetConsoleMode(h, mode.value | 0x0004))  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
+
+enable_ansi()
+
+# 颜色：暗灰（bright black）+ 微弱（dim）
+DIM = "\x1b[2m"
+GRAY = "\x1b[90m"
+RESET = "\x1b[0m"
+
+def dark_hint(text: str) -> str:
+    """
+    输出极深灰提示（几乎黑）。优先用 truecolor；否则退回 256 色 232。
+    """
+    # truecolor（24-bit）
+    try:
+        return f"\x1b[2m\x1b[38;2;12;12;12m{text}{RESET}"  # (12,12,12) 比 (18,18,18) 更贴近黑
+    except Exception:
+        # 256 色兜底：232 是最暗的灰阶
+        return f"\x1b[2m\x1b[38;5;232m{text}{RESET}"
+
 
 class BackStep(Exception):
     """用户输入 q 请求返回上一步。"""
@@ -2270,6 +2303,11 @@ def run_with_mode(src: Path, grouped, categories_present, meta):
     save_workbook_safe(wb, final_path)
     print(f"✅ Excel 已保存：{final_path}")
     print("✔ 完成。本次导出结束。")
+    # 只在本进程第一次成功导出后，给个低调彩蛋提示
+    global _hint_shown
+    if not _hint_shown:
+        print(dark_hint("Maybe you can try entering 'k' the next time you input the file path."))
+        _hint_shown = True
 
 # ===== 顶层交互循环 =====
 def main():
@@ -2350,4 +2388,3 @@ if __name__ == "__main__":
     main()
 
                                                                                                         # v4.2.2
-
