@@ -1505,11 +1505,12 @@ def net_part(name: str) -> str:
     返回 'XX' / 'FG' / 'SX' / 'GEN'（泛称）之一；大小写不敏感，兼容中文别名。
     """
     s = name.upper()
-    if re.search(r"\bXX\b|下\s*弦", s):
+    # 形如 XX1 / XX-12 / XX_003，或中文别名
+    if re.search(r"(?<![A-Z0-9])XX(?=[-_]?\d+)|下\s*弦", s):
         return "XX"
-    if re.search(r"\bFG\b|腹\s*杆", s):
+    if re.search(r"(?<![A-Z0-9])FG(?=[-_]?\d+)|腹\s*杆", s):
         return "FG"
-    if re.search(r"\bSX\b|上\s*弦", s):
+    if re.search(r"(?<![A-Z0-9])SX(?=[-_]?\d+)|上\s*弦", s):
         return "SX"
     if re.search(r"\bWJ\b|网\s*架|SPACE\s*FRAME|GRID", s):
         return "GEN"
@@ -1525,13 +1526,10 @@ def _net_no(name: str):
     s = name.upper()
     part = net_part(name)
     if part in ("XX", "FG", "SX"):
-        m = re.search(rf"\b{part}\s*[-_]?(\d+)\b", s)
+        m = re.search(rf"{part}\s*[-_]?(\d+)", s)
         return int(m.group(1)) if m else None
-    m = re.search(r"(?:WJ|网架|SPACE\s*FRAME|GRID)\s*[-_]?(\d+)\b", s)
-    if m:
-        return int(m.group(1))
-    return None
-
+    m = re.search(r"(?:WJ|网架|SPACE\s*FRAME|GRID)\s*[-_]?(\d+)", s)
+    return int(m.group(1)) if m else None
 
 def _wz_no(name: str):
     """
