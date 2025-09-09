@@ -1519,16 +1519,18 @@ def net_part(name: str) -> str:
 def _net_no(name: str):
     """
     从网架构件名里提取编号（XX12 / FG-03 / SX_7 / 网架-15 等）。
+
+    仅在明确前缀或泛称存在时才解析编号，避免误吃其他数字。
     """
     s = name.upper()
-    m = re.search(r"\b(?:XX|FG|SX)\s*[-_]?(\d+)\b", s)
-    if m:
-        return int(m.group(1))
+    part = net_part(name)
+    if part in ("XX", "FG", "SX"):
+        m = re.search(rf"\b{part}\s*[-_]?(\d+)\b", s)
+        return int(m.group(1)) if m else None
     m = re.search(r"(?:WJ|网架|SPACE\s*FRAME|GRID)\s*[-_]?(\d+)\b", s)
     if m:
         return int(m.group(1))
-    m = re.search(r"(\d+)\b", s)
-    return int(m.group(1)) if m else None
+    return None
 
 
 def _wz_no(name: str):
@@ -1668,25 +1670,35 @@ def prompt_date_buckets(categories_present, grouped):
                         txt = ask(f"🕸 网架-{part} 编号范围（例：1-12 20-25；留空={placeholder}；*=所有）：")
                         if not txt and prev_rule is not None:
                             rule = copy.deepcopy(prev_rule)
+                            sub_rules[part] = rule
+                            print(f"✅ 已设置 网架-{part}: {rule}（同上）")
                         else:
                             rule = parse_rule(txt)
-                        sub_rules[part] = rule
+                            sub_rules[part] = rule
+                            print(f"✅ 已设置 网架-{part}: {rule}")
                         prev_rule = rule
                     if "GEN" in present_parts:
                         placeholder = "同上" if prev_rule else "不接收"
                         txt = ask(f"🕸 网架-泛称 编号范围（留空={placeholder}；*=所有）：")
                         if not txt and prev_rule is not None:
                             rule = copy.deepcopy(prev_rule)
+                            sub_rules["GEN"] = rule
+                            print(f"✅ 已设置 网架-泛称: {rule}（同上）")
                         else:
                             rule = parse_rule(txt)
-                        sub_rules["GEN"] = rule
+                            sub_rules["GEN"] = rule
+                            print(f"✅ 已设置 网架-泛称: {rule}")
                 else:
                     for part in sorted(present_parts - {"GEN"}):
                         txt = ask(f"🕸 网架-{part} 楼层规则（例：1-3 5 7-10 屋面；留空=不接收；*=不限）：")
-                        sub_rules[part] = parse_rule(txt)
+                        rule = parse_rule(txt)
+                        sub_rules[part] = rule
+                        print(f"✅ 已设置 网架-{part}: {rule}")
                     if "GEN" in present_parts:
                         txt = ask("🕸 网架-泛称 楼层规则（留空=不接收；*=不限）：")
-                        sub_rules["GEN"] = parse_rule(txt)
+                        rule = parse_rule(txt)
+                        sub_rules["GEN"] = rule
+                        print(f"✅ 已设置 网架-泛称: {rule}")
                 rules[cat] = {"strategy": net_bucket_strategy, "parts": sub_rules}
             else:
                 txt = ask(f"🏗 {cat} 楼层规则（例：1-3 5 7-10 屋面；留空=不接收；*=不限）：")
@@ -2280,7 +2292,9 @@ def prompt_break_submode(has_gz, has_gl):
 # ===== 主流程 =====
 def run_mode(mode: str, wb, grouped, categories_present):
     """按指定模式执行一次导出。"""
-    global support_bucket_strategy
+    global support_bucket_strategy, net_bucket_strategy
+    support_bucket_strategy = None
+    net_bucket_strategy = None
     res = try_handle_mode4(mode, wb, grouped, categories_present)
     if res is not None:
         return res
