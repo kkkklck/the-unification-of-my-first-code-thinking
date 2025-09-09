@@ -17,7 +17,7 @@
 
 # 4. 注意事项：
 # - Word 源文件需为 .docx 格式，数据需存储在含 “测点 1”“平均值” 关键词的表格中（程序仅识别此类表格）
-# - Excel 模板需根据是否含支撑数据选择：含支撑用 “防火２有支撑版.xlsx”，不含支撑用 “防火２无支撑版.xlsx”，模板需包含 “钢柱”“钢梁” 基础工作表
+# - Excel 模板统一使用 “防火２有支撑版.xlsx”，未使用的工作表（如“支撑”）会自动清理
 # - 运行时请关闭目标 Word 和 Excel 文件，避免文件占用导致读写失败或数据损坏
 # - 程序会自动生成 “汇总原始记录.docx” 并存于 Word 同目录，用于数据核对
 # - 支持 “钢柱”“钢梁”“支撑” 分类，未识别构件自动归为 “其他” 类，共用钢柱模板格式
@@ -46,8 +46,7 @@ AUTHOR = "LCK"
 
 # ===== 默认路径 =====
 WORD_SRC_DEFAULT = Path(r"D:\eg\eg.docx")
-XLSX_WITH_SUPPORT_DEFAULT = Path(r"E:\公司尝试\防火原始文件\防火２有支撑版.xlsx")
-XLSX_NO_SUPPORT_DEFAULT = Path(r"E:\公司尝试\防火原始文件\防火２无支撑版.xlsx")
+XLSX_WITH_SUPPORT_DEFAULT = Path(r"E:\公司尝试\防火原始文件\防火excel模板.xlsx")
 DEFAULT_FONT_PT = 9
 
 # 每页 5 组、每组 5 行、每行 8 读数+平均值
@@ -2412,7 +2411,7 @@ def prepare_from_word(src: Path):
 
 
 def run_with_mode(src: Path, grouped, categories_present, meta):
-    tpl_path = XLSX_WITH_SUPPORT_DEFAULT if "支撑" in categories_present else XLSX_NO_SUPPORT_DEFAULT
+    tpl_path = XLSX_WITH_SUPPORT_DEFAULT  # 始终使用有支撑模板
     if not tpl_path.exists():
         raise FileNotFoundError(f"Excel 模板不存在：{tpl_path}")
 
@@ -2527,4 +2526,4 @@ def read_groups_from_doc(path: Path):
 if __name__ == "__main__":
     main()
 
-    # v4.2.2
+    # v4.2.3
