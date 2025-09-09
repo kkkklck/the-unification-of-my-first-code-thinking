@@ -41,7 +41,7 @@ from openpyxl.styles import Font, Alignment
 warnings.filterwarnings("ignore", category=SyntaxWarning)
 
 TITLE = "The Unification"
-VERSION = "v 4.2.2"
+VERSION = "v 4.2.3"
 AUTHOR = "LCK"
 
 # ===== 默认路径 =====
@@ -2527,3 +2527,4 @@ if __name__ == "__main__":
     main()
 
     # v4.2.3
+
