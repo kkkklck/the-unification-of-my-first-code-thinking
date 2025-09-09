@@ -41,7 +41,7 @@ from openpyxl.styles import Font, Alignment
 warnings.filterwarnings("ignore", category=SyntaxWarning)
 
 TITLE = "The Unification"
-VERSION = "v 5.0.1"
+VERSION = "v 5.0.2"
 AUTHOR = "LCK"
 
 # ===== 默认路径 =====
@@ -1634,6 +1634,16 @@ def prompt_date_buckets(categories_present, grouped):
             break
         print("请输入 1-10 之间的整数。")
     buckets = []
+
+    # 预先检测网架子类，向用户提示出现的名称
+    net_parts_present = set()
+    if "网架" in categories_present:
+        net_parts_present = detect_net_parts_for_category(grouped, "网架")
+        if net_parts_present:
+            name_map = {"XX": "XX", "FG": "FG", "SX": "SX", "GEN": "泛称"}
+            pretty = "、".join(name_map.get(p, p) for p in sorted(net_parts_present))
+            print(f"🕸 本次识别到的网架名称：{pretty}")
+
     for i in range(1, n + 1):
         print(f"\n—— 第 {i} 天 ——")
         d = ask("📅 日期（20250101 / 2025年1月1日 / 2025 1 1 / 2025.1.1 / 2025-1-1 / 1-1 / 01-01）：")
@@ -1649,20 +1659,34 @@ def prompt_date_buckets(categories_present, grouped):
                 rules[cat] = parse_rule(txt)
             elif cat == "网架":
                 prompt_net_strategy_for_bucket()
-                present_parts = detect_net_parts_for_category(grouped, "网架")
+                present_parts = net_parts_present
                 sub_rules = {}
-                for part in sorted(present_parts - {"GEN"}):
-                    if net_bucket_strategy == "number":
-                        txt = ask(f"🕸 网架-{part} 编号范围（例：1-12 20-25；留空=不接收；*=不限）：")
-                    else:
+                if net_bucket_strategy == "number":
+                    prev_rule = None
+                    for part in sorted(present_parts - {"GEN"}):
+                        placeholder = "同上" if prev_rule else "不接收"
+                        txt = ask(f"🕸 网架-{part} 编号范围（例：1-12 20-25；留空={placeholder}；*=所有）：")
+                        if not txt and prev_rule is not None:
+                            rule = copy.deepcopy(prev_rule)
+                        else:
+                            rule = parse_rule(txt)
+                        sub_rules[part] = rule
+                        prev_rule = rule
+                    if "GEN" in present_parts:
+                        placeholder = "同上" if prev_rule else "不接收"
+                        txt = ask(f"🕸 网架-泛称 编号范围（留空={placeholder}；*=所有）：")
+                        if not txt and prev_rule is not None:
+                            rule = copy.deepcopy(prev_rule)
+                        else:
+                            rule = parse_rule(txt)
+                        sub_rules["GEN"] = rule
+                else:
+                    for part in sorted(present_parts - {"GEN"}):
                         txt = ask(f"🕸 网架-{part} 楼层规则（例：1-3 5 7-10 屋面；留空=不接收；*=不限）：")
-                    sub_rules[part] = parse_rule(txt)
-                if "GEN" in present_parts:
-                    if net_bucket_strategy == "number":
-                        txt = ask("🕸 网架-泛称 编号范围（留空=不接收；*=不限）：")
-                    else:
+                        sub_rules[part] = parse_rule(txt)
+                    if "GEN" in present_parts:
                         txt = ask("🕸 网架-泛称 楼层规则（留空=不接收；*=不限）：")
-                    sub_rules["GEN"] = parse_rule(txt)
+                        sub_rules["GEN"] = parse_rule(txt)
                 rules[cat] = {"strategy": net_bucket_strategy, "parts": sub_rules}
             else:
                 txt = ask(f"🏗 {cat} 楼层规则（例：1-3 5 7-10 屋面；留空=不接收；*=不限）：")
@@ -2610,4 +2634,4 @@ def read_groups_from_doc(path: Path):
 if __name__ == "__main__":
     main()
 
-    # v5.0.1
+    # v5.0.2
