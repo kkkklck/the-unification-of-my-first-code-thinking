@@ -20,7 +20,7 @@
 # - Excel 模板统一使用 “防火２有支撑版.xlsx”，未使用的工作表（如“支撑”）会自动清理
 # - 运行时请关闭目标 Word 和 Excel 文件，避免文件占用导致读写失败或数据损坏
 # - 程序会自动生成 “汇总原始记录.docx” 并存于 Word 同目录，用于数据核对
-# - 支持 “钢柱”“钢梁”“支撑” 分类，未识别构件自动归为 “其他” 类，共用钢柱模板格式
+# - 支持 “钢柱”“钢梁”“支撑”“网架” 分类，未识别构件自动归为 “其他” 类，共用钢柱模板格式
 # - 生成的 Excel 报告自动命名为 “The Unification_报告版.xlsx”，同名文件会自动加序号（如 “The Unification_报告版 (1).xlsx”）
 # - “μ” 字符自动适配 Times New Roman 字体；仪器型号按平均值自动识别（<10→23-90，≥10→24-57）
 # - 日期分桶模式支持规则重叠处理，默认按 “后面的天” 优先，未分配数据可通过输入 “a” 并入最后一天
@@ -41,7 +41,7 @@ from openpyxl.styles import Font, Alignment
 warnings.filterwarnings("ignore", category=SyntaxWarning)
 
 TITLE = "The Unification"
-VERSION = "v 4.2.3"
+VERSION = "v 5.0.1"
 AUTHOR = "LCK"
 
 # ===== 默认路径 =====
@@ -57,15 +57,14 @@ BLOCKS_PER_SHEET = 5
 _hint_shown = False
 
 # 打印顺序：可自行调整位置
-CATEGORY_ORDER = ["钢柱", "钢梁", "支撑", "其他"]
+CATEGORY_ORDER = ["钢柱", "钢梁", "支撑", "网架", "其他"]
 
-# 支撑分桶策略："number"=按编号，"floor"=按楼层；仅本次运行生效
+# 支撑/网架 分桶策略："number"=按编号，"floor"=按楼层；仅本次运行生效
 support_bucket_strategy = None
+net_bucket_strategy = None
 
 
 # === 通用输入封装 ===
-
-
 def enable_ansi():
     if os.name != "nt":
         return True
@@ -564,6 +563,11 @@ def groups_from_your_rows(rows_all_tables):
 
 # ===== 分类 / 规则 =====
 CATEGORY_SYNONYMS = {
+    "网架": [
+        "网架", "WJ", "SPACE FRAME", "SPACEFRAME", "GRID", "GRID STRUCTURE",
+        "桁架网架", "球节点", "网壳", "SJ",
+        "XX", "SX", "FG", "上弦", "下弦", "腹杆"
+    ],
     "支撑": ["支撑", "WZ", "ZC", "支架", "斜撑", "撑杆"],
     "钢柱": ["钢柱", "柱", "GZ", "框架柱", "立柱", "H柱"],
     "钢梁": ["钢梁", "梁", "GL", "连系梁", "檩条", "楼梯梁", "平台梁", "屋架梁"],
@@ -1214,6 +1218,7 @@ this application was made by {AUTHOR} in 2025 summer
   • 温度输入：任意字符串（如 24℃ / 24.5 度），自动标准化为“X℃”或“X.X℃”
   • “支撑（WZ）”分桶策略（仅 Mode 1/2/3）：
       - 在进入“支撑”配置之前询问：1=按编号；2=按楼层（与钢柱/钢梁一致）
+  • 新增【网架】：支持 XX/FG/SX 子类；分桶方式与支撑一致（编号/楼层），但子类分别可配规则；同一天写同一张“网架”表。
   • 输出规则：
       - 统一使用模板页池命名（不在 Sheet 名称中写日期/楼层）
       - 日期写入 K33、温度写入 K34，仪器型号自动识别写入（E33:H33）
@@ -1495,20 +1500,51 @@ def _in_ranges(val: int, ranges):
     return False
 
 
+def net_part(name: str) -> str:
+    """
+    返回 'XX' / 'FG' / 'SX' / 'GEN'（泛称）之一；大小写不敏感，兼容中文别名。
+    """
+    s = name.upper()
+    if re.search(r"\bXX\b|下\s*弦", s):
+        return "XX"
+    if re.search(r"\bFG\b|腹\s*杆", s):
+        return "FG"
+    if re.search(r"\bSX\b|上\s*弦", s):
+        return "SX"
+    if re.search(r"\bWJ\b|网\s*架|SPACE\s*FRAME|GRID", s):
+        return "GEN"
+    return "GEN"
+
+
+def _net_no(name: str):
+    """
+    从网架构件名里提取编号（XX12 / FG-03 / SX_7 / 网架-15 等）。
+    """
+    s = name.upper()
+    m = re.search(r"\b(?:XX|FG|SX)\s*[-_]?(\d+)\b", s)
+    if m:
+        return int(m.group(1))
+    m = re.search(r"(?:WJ|网架|SPACE\s*FRAME|GRID)\s*[-_]?(\d+)\b", s)
+    if m:
+        return int(m.group(1))
+    m = re.search(r"(\d+)\b", s)
+    return int(m.group(1)) if m else None
+
+
 def _wz_no(name: str):
     """
     从支撑构件名称中提取编号（如从“WZ3”“支撑-5”中提取3、5）。
 
-    支持关键词匹配：
-    - 含“WZ”或“ZC”前缀（如“WZ12”“ZC-8”）
-    - 含“支撑”关键词（如“支撑6”“斜撑-3”）
-    提取失败时返回None。
+支持关键词匹配：
+- 含“WZ”或“ZC”前缀（如“WZ12”“ZC-8”）
+- 含“支撑”关键词（如“支撑6”“斜撑-3”）
+提取失败时返回None。
 
-    Args:
-        name: 支撑构件名称字符串（如“WZ5”“支撑-10”）
-    Returns:
-        int | None: 提取的编号，失败则返回None
-    """
+Args:
+    name: 支撑构件名称字符串（如“WZ5”“支撑-10”）
+Returns:
+    int | None: 提取的编号，失败则返回None
+"""
     m = re.search(r"(?i)\b(?:WZ|ZC)\s*[-–—]?\s*(\d+)\b", name)
     if m: return int(m.group(1))
     m = re.search(r"支撑\s*[-–—]?\s*(\d+)", name)
@@ -1557,7 +1593,24 @@ def prompt_support_strategy_for_bucket():
     return support_bucket_strategy
 
 
-def prompt_date_buckets(categories_present):
+def prompt_net_strategy_for_bucket():
+    """在需要网架分桶策略时询问一次。"""
+    global net_bucket_strategy
+    if net_bucket_strategy is None:
+        ans = ask("网架分桶方式：1) 按编号  2) 按楼层（回车=1）")
+        net_bucket_strategy = "floor" if ans == "2" else "number"
+    return net_bucket_strategy
+
+
+def detect_net_parts_for_category(grouped, cat="网架"):
+    """检测本次运行实际出现的网架子类集合。"""
+    parts = set()
+    for g in grouped.get(cat, []):
+        parts.add(net_part(g["name"]))
+    return parts or {"GEN"}
+
+
+def prompt_date_buckets(categories_present, grouped):
     """
     交互式收集日期桶配置，支持1-10天的检测数据分发规则。
 
@@ -1569,6 +1622,7 @@ def prompt_date_buckets(categories_present):
 
     Args:
         categories_present: 存在的构件类型列表（如["钢柱", "支撑"]）
+        grouped: 按类型分组的构件数据，用于检测网架子类
     Returns:
         list[dict]: 日期桶配置列表，每个元素含日期、环境、规则等信息
     """
@@ -1592,7 +1646,24 @@ def prompt_date_buckets(categories_present):
                     txt = ask("🦾 支撑 楼层规则（例：1-3 5 7-10 屋面；留空=不接收；*=不限）：")
                 else:
                     txt = ask("🦾 支撑 编号范围（例：1-12 20-25；留空=不接收；*=不限）：")
-                    rules[cat] = parse_rule(txt)
+                rules[cat] = parse_rule(txt)
+            elif cat == "网架":
+                prompt_net_strategy_for_bucket()
+                present_parts = detect_net_parts_for_category(grouped, "网架")
+                sub_rules = {}
+                for part in sorted(present_parts - {"GEN"}):
+                    if net_bucket_strategy == "number":
+                        txt = ask(f"🕸 网架-{part} 编号范围（例：1-12 20-25；留空=不接收；*=不限）：")
+                    else:
+                        txt = ask(f"🕸 网架-{part} 楼层规则（例：1-3 5 7-10 屋面；留空=不接收；*=不限）：")
+                    sub_rules[part] = parse_rule(txt)
+                if "GEN" in present_parts:
+                    if net_bucket_strategy == "number":
+                        txt = ask("🕸 网架-泛称 编号范围（留空=不接收；*=不限）：")
+                    else:
+                        txt = ask("🕸 网架-泛称 楼层规则（留空=不接收；*=不限）：")
+                    sub_rules["GEN"] = parse_rule(txt)
+                rules[cat] = {"strategy": net_bucket_strategy, "parts": sub_rules}
             else:
                 txt = ask(f"🏗 {cat} 楼层规则（例：1-3 5 7-10 屋面；留空=不接收；*=不限）：")
                 rules[cat] = parse_rule(txt)
@@ -1637,8 +1708,10 @@ def assign_by_buckets(cat_groups: dict, buckets, later_priority=True):
             wzno = _wz_no(g["name"]) if cat == "支撑" and support_bucket_strategy == "number" else None
             for bi in order:
                 b = buckets[bi]
-                rule = b["rules"].get(cat, {"enabled": False, "ranges": None})
-                if not rule.get("enabled"):
+                rule = b["rules"].get(cat)
+                if not rule:
+                    continue
+                if cat != "网架" and not rule.get("enabled"):
                     continue
                 ok = False  # noqa
                 if cat == "支撑":
@@ -1648,11 +1721,21 @@ def assign_by_buckets(cat_groups: dict, buckets, later_priority=True):
                         ok = ok_num
                     else:
                         ok = _in_ranges(fl, rule["ranges"])
+                elif cat == "网架":
+                    part = net_part(g["name"])
+                    part_rule = rule["parts"].get(part) or rule["parts"].get("GEN")
+                    if not (part_rule and part_rule["enabled"]):
+                        continue
+                    if rule["strategy"] == "number":
+                        no = _net_no(g["name"])
+                        ok = (no is not None) and _in_ranges(no, part_rule["ranges"])
+                    else:
+                        ok = _in_ranges(fl, part_rule["ranges"])
                 else:
                     ok = _in_ranges(fl, rule["ranges"])
                 if ok and _match_keywords(g["name"], b["kws"]):
-                    cat_byb[cat][bi].append(g);
-                    assigned[cat].add(idx);
+                    cat_byb[cat][bi].append(g)
+                    assigned[cat].add(idx)
                     break
 
     remain_by_cat = {cat: [g for i, g in enumerate(groups) if i not in assigned[cat]]
@@ -1750,7 +1833,7 @@ def make_target_order_generic(pages_slices_by_cat, categories_present):
 
     排序规则：
     1. 按日期桶轮次分组
-    2. 同轮次内按CATEGORY_ORDER（钢柱→钢梁→支撑→其他）排序
+    2. 同轮次内按CATEGORY_ORDER（钢柱→钢梁→支撑→网架→其他）排序
     确保工作表按检测流程和类型逻辑有序排列。
 
     Args:
@@ -1819,11 +1902,11 @@ def fill_blocks_to_pages(wb, pages_slice, blocks, prog: Prog | None = None):
         slash_tail(ws, detect_anchors(ws), pos)
 
 
-def cleanup_unused_sheets(wb, used_names, bases=("钢柱", "钢梁", "支撑", "其他")):
+def cleanup_unused_sheets(wb, used_names, bases=("钢柱", "钢梁", "支撑", "网架", "其他")):
     """
     清理Excel中未使用的指定类型工作表，减少冗余。
 
-    仅保留已使用的目标类型工作表（钢柱/钢梁/支撑/其他），避免模板中多余工作表干扰。
+    仅保留已使用的目标类型工作表（钢柱/钢梁/支撑/网架/其他），避免模板中多余工作表干扰。
     确保至少保留一个工作表（防止工作簿为空）。
 
     Args:
@@ -2067,7 +2150,7 @@ def mode4_run(wb, grouped, categories_present):
         else:
             grouped_left = {c: leftover_by_cat[c] for c in CATEGORY_ORDER if leftover_by_cat.get(c)}
             if grouped_left:
-                buckets2 = prompt_date_buckets(list(grouped_left.keys()))
+                buckets2 = prompt_date_buckets(list(grouped_left.keys()), grouped_left)
                 later_first = prompt_bucket_priority()
                 cat_byb, remain_by_cat = assign_by_buckets(grouped_left, buckets2, later_first)
                 ok, auto_last = preview_buckets_generic(cat_byb, remain_by_cat, buckets2, list(grouped_left.keys()))
@@ -2342,7 +2425,7 @@ def run_mode(mode: str, wb, grouped, categories_present):
 
     else:
         # —— 新法：日期分桶（泛化） ——
-        buckets = prompt_date_buckets(categories_present)
+        buckets = prompt_date_buckets(categories_present, grouped)
         later_first = prompt_bucket_priority()  # 回车=是
         cat_byb, remain_by_cat = assign_by_buckets(grouped, buckets, later_first)
         ok, auto_last = preview_buckets_generic(cat_byb, remain_by_cat, buckets, categories_present)
@@ -2465,8 +2548,9 @@ def main():
         try:
             src = Path(path)
             print(f"✅ 使用 Word：{src}")
-            global support_bucket_strategy
+            global support_bucket_strategy, net_bucket_strategy
             support_bucket_strategy = None
+            net_bucket_strategy = None
 
             grouped, categories_present = prepare_from_word(src)
 
@@ -2526,5 +2610,4 @@ def read_groups_from_doc(path: Path):
 if __name__ == "__main__":
     main()
 
-    # v4.2.3
-
+    # v5.0.1
