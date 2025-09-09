@@ -40,19 +40,19 @@ from openpyxl.styles import Font, Alignment
 
 warnings.filterwarnings("ignore", category=SyntaxWarning)
 
-TITLE   = "The Unification"
+TITLE = "The Unification"
 VERSION = "v 4.2.2"
 AUTHOR = "LCK"
 
 # ===== 默认路径 =====
 WORD_SRC_DEFAULT = Path(r"D:\eg\eg.docx")
-XLSX_WITH_SUPPORT_DEFAULT = Path(r"D:\防火原始文件\防火２有支撑版.xlsx")
-XLSX_NO_SUPPORT_DEFAULT   = Path(r"D:\防火原始文件\防火２无支撑版.xlsx")
+XLSX_WITH_SUPPORT_DEFAULT = Path(r"E:\公司尝试\防火原始文件\防火２有支撑版.xlsx")
+XLSX_NO_SUPPORT_DEFAULT = Path(r"E:\公司尝试\防火原始文件\防火２无支撑版.xlsx")
 DEFAULT_FONT_PT = 9
 
 # 每页 5 组、每组 5 行、每行 8 读数+平均值
 PER_LINE_PER_BLOCK = 5
-BLOCKS_PER_SHEET   = 5
+BLOCKS_PER_SHEET = 5
 
 # 本次运行只提示一次
 _hint_shown = False
@@ -62,6 +62,7 @@ CATEGORY_ORDER = ["钢柱", "钢梁", "支撑", "其他"]
 
 # 支撑分桶策略："number"=按编号，"floor"=按楼层；仅本次运行生效
 support_bucket_strategy = None
+
 
 # === 通用输入封装 ===
 
@@ -76,12 +77,14 @@ def enable_ansi():
         return False
     return bool(k32.SetConsoleMode(h, mode.value | 0x0004))  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
 
+
 enable_ansi()
 
 # 颜色：暗灰（bright black）+ 微弱（dim）
 DIM = "\x1b[2m"
 GRAY = "\x1b[90m"
 RESET = "\x1b[0m"
+
 
 def dark_hint(text: str) -> str:
     """
@@ -133,55 +136,57 @@ def show_help_browser():
     """帮助浏览器包装。"""
     tutorial_browser()
 
+
 def show_easter_egg():
     """Easter egg message for curious users."""
     print("\n🎉这是一个小彩蛋，致正在北京漂泊的你："
+
+          """\n          嘿，今天过得怎样？
           
-"""\n嘿，今天过得怎样？
-
-有没有如愿多睡一会懒觉，有没有觉得自己比昨天更好
-
-我想听听你今天的小事——
-老板有没有临下班给你丢个“顺手看看”？
-外卖是不是还是那家麻辣烫，你点“微辣”结果还是上头？
-回到合租房，你是不是又轻轻关门，怕惊醒陌生的梦？
-
-别急着坚强，先放松一会儿。咱慢慢说。
-
-有时候我也会想：我们到底在赶什么？
-通勤像回合制游戏，卡点打卡，换乘升级；
-朋友圈像展览，大家都把光亮挂在墙上，阴影藏在鞋盒里。
-你说你累，我懂——不是“做事”的累，是“证明自己”的累。
-
-但是你知道吗，我喜欢看你认真时那个表情：
-眉心轻轻拧一下，像在和困难开私聊；
-打完一行代码、写完一段文案、对齐一张表格，
-你会悄悄点一下保存，像给自己递水。
-
-北京没有义务温柔，但我们可以对彼此温柔。
-你讲，我听；我讲，你也可以打断我。
-我们不解决所有问题，只把今晚的叹气放下三分之一就行。
-
-如果你问“值得吗？”
-我也会反问你：“哪一刻让你觉得还想再试一次？”
-是凌晨的页面通过了，是邮件里突然多了个“已阅”，
-还是朋友说了一句“有你真好”？
-这些微小的亮，它们不大，但够我们往前挪半步。
-
-我不劝你乐观，也不催你振作。
-我只想把这句话放在这里，像把外套搭在你肩上：
-
-我们可以慢一点，但别把自己弄丢。
-
-等你想继续聊，我还在。
-在五环的风里，在灯没关的屏幕前，在你回消息的那个“嗯”字后面。
-
-晚安，先把背放松，再把心放下。
-明天见，我们接着说。
-LCK
-""")
+          有没有如愿多睡一会懒觉，有没有觉得自己比昨天更好
+          
+          我想听听你今天的小事——
+          老板有没有临下班给你丢个“顺手看看”？
+          外卖是不是还是那家麻辣烫，你点“微辣”结果还是上头？
+          回到合租房，你是不是又轻轻关门，怕惊醒陌生的梦？
+          
+          别急着坚强，先放松一会儿。咱慢慢说。
+          
+          有时候我也会想：我们到底在赶什么？
+          通勤像回合制游戏，卡点打卡，换乘升级；
+          朋友圈像展览，大家都把光亮挂在墙上，阴影藏在鞋盒里。
+          你说你累，我懂——不是“做事”的累，是“证明自己”的累。
+          
+          但是你知道吗，我喜欢看你认真时那个表情：
+          眉心轻轻拧一下，像在和困难开私聊；
+          打完一行代码、写完一段文案、对齐一张表格，
+          你会悄悄点一下保存，像给自己递水。
+          
+          北京没有义务温柔，但我们可以对彼此温柔。
+          你讲，我听；我讲，你也可以打断我。
+          我们不解决所有问题，只把今晚的叹气放下三分之一就行。
+          
+          如果你问“值得吗？”
+          我也会反问你：“哪一刻让你觉得还想再试一次？”
+          是凌晨的页面通过了，是邮件里突然多了个“已阅”，
+          还是朋友说了一句“有你真好”？
+          这些微小的亮，它们不大，但够我们往前挪半步。
+          
+          我不劝你乐观，也不催你振作。
+          我只想把这句话放在这里，像把外套搭在你肩上：
+          
+          我们可以慢一点，但别把自己弄丢。
+          
+          等你想继续聊，我还在。
+          在五环的风里，在灯没关的屏幕前，在你回消息的那个“嗯”字后面。
+          
+          晚安，先把背放松，再把心放下。
+          明天见，我们接着说。
+          LCK
+          """)
 
     input("按回车即可返回")
+
 
 def ask_path() -> str | None:
     """顶层路径输入。
@@ -201,14 +206,17 @@ def ask_path() -> str | None:
         return "__QUIT__"
     return raw
 
+
 def is_valid_path(p: str) -> bool:
     """简单校验路径是否存在。"""
     path_obj = Path(p.strip('"'))
     return path_obj.exists() and path_obj.is_file()
 
+
 # ---- 文件占用友好提示封装 ----
 class FileInUse(Exception):
     pass
+
 
 def _is_in_use_error(e: Exception) -> bool:
     # Windows 常见：WinError 32（共享冲突），或 PermissionError 13
@@ -220,6 +228,7 @@ def _is_in_use_error(e: Exception) -> bool:
                "permission denied" in msg)
     return bool(code32 or perm13 or hit_msg)
 
+
 def load_workbook_safe(path, **kw):
     from openpyxl import load_workbook
     try:
@@ -229,6 +238,7 @@ def load_workbook_safe(path, **kw):
             raise FileInUse(f"Excel 模板/文件被占用：{path}") from e
         raise
 
+
 def save_workbook_safe(wb, path):
     try:
         wb.save(path)
@@ -236,6 +246,7 @@ def save_workbook_safe(wb, path):
         if _is_in_use_error(e):
             raise FileInUse(f"无法保存 Excel（被占用）：{path}") from e
         raise
+
 
 def save_docx_safe(doc, path):
     try:
@@ -252,13 +263,14 @@ MIN_ROWS_EACH = 5
 PLACEHOLDER = "/"
 digit_re = re.compile(r"\d")
 HEADER = [
-    "序号","构件名称及部位",
-    "测点1 读数1","测点1 读数2",
-    "测点2 读数1","测点2 读数2",
-    "测点3 读数1","测点3 读数2",
-    "测点4 读数1","测点4 读数2",
+    "序号", "构件名称及部位",
+    "测点1 读数1", "测点1 读数2",
+    "测点2 读数1", "测点2 读数2",
+    "测点3 读数1", "测点3 读数2",
+    "测点4 读数1", "测点4 读数2",
     "涂层厚度平均值"
 ]
+
 
 def ensure_cells(row, need=NEED_COLS):
     """
@@ -271,9 +283,10 @@ def ensure_cells(row, need=NEED_COLS):
         need: 需要的最小列数，默认11列（与汇总表列数一致）
     """
     while len(row.cells) < need:
-        tc = copy.deepcopy(row.cells[0]._tc)        # noqa
+        tc = copy.deepcopy(row.cells[0]._tc)  # noqa
         for t in tc.xpath('.//*[local-name()="t"]'): t.text = ''
         row._tr.append(tc)  # noqa
+
 
 def color_row_red(row):
     """
@@ -287,7 +300,8 @@ def color_row_red(row):
     for c in row.cells:
         for p in c.paragraphs:
             for run in p.runs:
-                run.font.color.rgb = RGBColor(255,0,0)
+                run.font.color.rgb = RGBColor(255, 0, 0)
+
 
 def is_data_table(tbl):
     """
@@ -302,6 +316,7 @@ def is_data_table(tbl):
     """
     first_three = " ".join(c.text for r in tbl.rows[:3] for c in r.cells)
     return "测点1" in first_three and "平均值" in first_three
+
 
 def detect_layout(tbl):
     """
@@ -322,13 +337,15 @@ def detect_layout(tbl):
     for i, t in enumerate(hdr.cells):
         txt = (t.text or "").strip()
         m = re.match(r"测点(\d+)", txt)
-        if m: col_vals.append(i)
+        if m:
+            col_vals.append(i)
         elif "平均值" in txt and "所有" not in txt:
             col_avg = i
     is_beam = len(col_vals) == 3  # 梁 3 组，柱/支撑 4 组
     return col_vals, col_avg, is_beam
 
-def extract_rows_with_progress(tbl, ti: int, T: int):   # noqa
+
+def extract_rows_with_progress(tbl, ti: int, T: int):  # noqa
     """
     从数据表格提取行数据，带实时进度提示。
 
@@ -363,10 +380,11 @@ def extract_rows_with_progress(tbl, ti: int, T: int):   # noqa
 
         if "测点1" in line:
             if buffer:
-                rows.extend(buffer); buffer.clear()     # noqa
-            meas_titles = [f"测点{i+1}" for i in range(len(col_vals))]
+                rows.extend(buffer);
+                buffer.clear()  # noqa
+            meas_titles = [f"测点{i + 1}" for i in range(len(col_vals))]
             if is_beam: meas_titles.append("测点4")  # 梁补第4列标题
-            rows.append({"name":"", "vals":meas_titles, "avg":"平均值", "is_hdr":True})
+            rows.append({"name": "", "vals": meas_titles, "avg": "平均值", "is_hdr": True})
             continue
 
         if not digit_re.search(line):
@@ -376,7 +394,7 @@ def extract_rows_with_progress(tbl, ti: int, T: int):   # noqa
         vals = [r.cells[i].text.strip() for i in col_vals]
         if is_beam and len(vals) == 3: vals.append("/")
 
-        raw_avg = r.cells[col_avg].text.replace("\n","").strip()
+        raw_avg = r.cells[col_avg].text.replace("\n", "").strip()
         avg = raw_avg or last_avg or "/"
         last_avg = avg if raw_avg else last_avg
 
@@ -385,8 +403,10 @@ def extract_rows_with_progress(tbl, ti: int, T: int):   # noqa
         last_comp = comp
 
     rows.extend(buffer)
-    sys.stdout.write(f"\r📝 读取 Word：表 {ti}/{T}（100%）\n"); sys.stdout.flush()
+    sys.stdout.write(f"\r📝 读取 Word：表 {ti}/{T}（100%）\n");
+    sys.stdout.flush()
     return rows
+
 
 def build_summary_doc_with_progress(rows):
     """
@@ -414,10 +434,12 @@ def build_summary_doc_with_progress(rows):
         nonlocal serial, buffer
         miss = max(0, MIN_ROWS_EACH - len(buffer))
         for _ in range(miss):
-            q = tbl.add_row(); ensure_cells(q)
+            q = tbl.add_row();
+            ensure_cells(q)
             for z in range(2, 10): q.cells[z].text = PLACEHOLDER
             q.cells[10].text = PLACEHOLDER
-        serial += 1; buffer.clear()
+        serial += 1;
+        buffer.clear()
 
     for i, it in enumerate(rows, start=1):
         if i % step == 0 or i == total:
@@ -431,10 +453,13 @@ def build_summary_doc_with_progress(rows):
         comp = raw_name or last_comp or ""
 
         if last_comp and comp and comp != last_comp:
-            flush(); last_comp = None
+            flush();
+            last_comp = None
 
         if it.get("is_hdr"):
-            r = tbl.add_row(); ensure_cells(r); color_row_red(r)
+            r = tbl.add_row();
+            ensure_cells(r);
+            color_row_red(r)
             r.cells[1].text = "构件名称及部位" if not raw_name else raw_name
             for k, v in enumerate(it["vals"]):
                 c = 2 + k * 2
@@ -443,7 +468,9 @@ def build_summary_doc_with_progress(rows):
             last_comp = comp
             continue
 
-        r = tbl.add_row(); ensure_cells(r); buffer.append(r)
+        r = tbl.add_row();
+        ensure_cells(r);
+        buffer.append(r)
         first = (last_comp is None) or (comp and comp != last_comp)
         if first:
             r.cells[0].text = str(serial)
@@ -452,12 +479,14 @@ def build_summary_doc_with_progress(rows):
         for k, v in enumerate(it["vals"]):
             c = 2 + k * 2
             r.cells[c].text = v
-            r.cells[c+1].text = v
+            r.cells[c + 1].text = v
         r.cells[10].text = it["avg"]
 
     flush()
-    sys.stdout.write("\n"); sys.stdout.flush()
+    sys.stdout.write("\n");
+    sys.stdout.flush()
     return doc
+
 
 def set_doc_font_progress(doc, pt=DEFAULT_FONT_PT):
     """
@@ -483,7 +512,8 @@ def set_doc_font_progress(doc, pt=DEFAULT_FONT_PT):
         done += 1
         if done % step == 0 or done == total:
             pct = int(done * 100 / max(1, total))
-            sys.stdout.write(f"\r🖋 统一字体：{done}/{total}（{pct}%）"); sys.stdout.flush()
+            sys.stdout.write(f"\r🖋 统一字体：{done}/{total}（{pct}%）");
+            sys.stdout.flush()
 
     for t in doc.tables:
         for r in t.rows:
@@ -493,8 +523,11 @@ def set_doc_font_progress(doc, pt=DEFAULT_FONT_PT):
                     done += 1
                     if done % step == 0 or done == total:
                         pct = int(done * 100 / max(1, total))
-                        sys.stdout.write(f"\r🖋 统一字体：{done}/{total}（{pct}%）"); sys.stdout.flush()
-    sys.stdout.write("\n"); sys.stdout.flush()
+                        sys.stdout.write(f"\r🖋 统一字体：{done}/{total}（{pct}%）");
+                        sys.stdout.flush()
+    sys.stdout.write("\n");
+    sys.stdout.flush()
+
 
 # ===== rows → groups（8读数+平均值）=====
 def groups_from_your_rows(rows_all_tables):
@@ -510,7 +543,8 @@ def groups_from_your_rows(rows_all_tables):
             - name: 构件名称（str）
             - data: 数据行列表，每行包含8个读数和1个平均值（list[list[str]]）
     """
-    groups = []; cur = None
+    groups = [];
+    cur = None
     for it in rows_all_tables:
         if it.get("is_hdr"): continue
         name = (it.get("name") or "").strip()
@@ -524,9 +558,10 @@ def groups_from_your_rows(rows_all_tables):
             vals8.extend([v, v])
         while len(vals8) < 8: vals8.append("/")
         avg = (it.get("avg") or "/").strip() or "/"
-        cur["data"].append(vals8[:8] + [avg])   # noqa
+        cur["data"].append(vals8[:8] + [avg])  # noqa
     if cur and cur["data"]: groups.append(cur)
     return groups
+
 
 # ===== 分类 / 规则 =====
 CATEGORY_SYNONYMS = {
@@ -534,6 +569,7 @@ CATEGORY_SYNONYMS = {
     "钢柱": ["钢柱", "柱", "GZ", "框架柱", "立柱", "H柱"],
     "钢梁": ["钢梁", "梁", "GL", "连系梁", "檩条", "楼梯梁", "平台梁", "屋架梁"],
 }
+
 
 def kind_of(name: str) -> str:
     """
@@ -557,6 +593,7 @@ def kind_of(name: str) -> str:
                     return cat
     return "其他"  # 未识别 → 其他
 
+
 def floor_of(name: str) -> int:
     """
     从构件名称中提取楼层号，特殊楼层用固定大数值标记。
@@ -568,9 +605,10 @@ def floor_of(name: str) -> int:
     Returns:
         int: 提取的楼层号（特殊楼层用10⁶级数值，无楼层信息返回0）
     """
-    s = name.replace("－","-").replace("—","-").replace("–","-")
-    if re.search(r"(?:屋[顶面]|顶\s*层)", s): return 10**6   # noqa
-    if "机房层" in s: return 10**6 - 1
+    s = name.replace("－", "-").replace("—", "-").replace("–", "-")
+    sl = s.lower()
+    if re.search(r"(?:屋面|屋顶|顶\s*层)", s) or re.search(r"\b(?:wm|dc)", sl): return 10 ** 6  # noqa
+    if "机房层" in s or re.search(r"\bjf", sl): return 10 ** 6 - 1
     m = re.search(r"(?i)[FL]\s*(\d+)", s)
     if m: return int(m.group(1))
     m = re.search(r"(?i)(\d+)\s*[FL]", s)
@@ -584,9 +622,10 @@ def floor_of(name: str) -> int:
 def _floor_label_from_name(name: str) -> str:
     """根据名称提取楼层标签，如"5F"、"B2"、"屋面"等。"""
     s = (name or "").replace("－", "-").replace("—", "-").replace("–", "-")
-    if re.search(r"屋面|顶层", s):
+    sl = s.lower()
+    if re.search(r"屋面|顶层", s) or re.search(r"\b(?:wm|dc)", sl):
         return "屋面"
-    if "机房层" in s:
+    if "机房层" in s or re.search(r"\bjf", sl):
         return "机房层"
     m = re.search(r"(?i)B\s*(\d+)", s)
     if m:
@@ -611,6 +650,7 @@ def _floor_sort_key_by_label(label: str):
         return (3, 0)
     return (4, 0)
 
+
 def segment_index(floor: int, breaks: list[int]) -> int:
     """
     根据楼层断点计算当前楼层所属的分段索引，用于楼层分页逻辑。
@@ -623,9 +663,10 @@ def segment_index(floor: int, breaks: list[int]) -> int:
     Returns:
         int: 分段索引（从0开始）
     """
-    for i,b in enumerate(breaks):
+    for i, b in enumerate(breaks):
         if floor <= b: return i
     return len(breaks)
+
 
 def expand_blocks(groups, block_size=PER_LINE_PER_BLOCK):
     """
@@ -641,14 +682,15 @@ def expand_blocks(groups, block_size=PER_LINE_PER_BLOCK):
             - name: 构件名称（str）
             - data: 5行数据（每行9列，list[list[str]]）
     """
-    blocks=[]
+    blocks = []
     for g in groups:
         rows = list(g["data"])
         for k in range(0, len(rows), block_size):
-            sub = rows[k:k+block_size]
-            while len(sub) < block_size: sub.append(['/']*9)
+            sub = rows[k:k + block_size]
+            while len(sub) < block_size: sub.append(['/'] * 9)
             blocks.append({"name": g["name"], "data": sub})
     return blocks
+
 
 # ===== Excel sheet 复制与设置 =====
 def clone_sheet_keep_print(wb, tpl_name: str, title: str):
@@ -668,18 +710,29 @@ def clone_sheet_keep_print(wb, tpl_name: str, title: str):
     ws = wb.copy_worksheet(tpl)
     ws.title = title
     ws.sheet_view.view = "pageBreakPreview"
-    try: ws.freeze_panes = tpl.freeze_panes
-    except: pass
-    try: ws.print_area = tpl.print_area
-    except: pass
-    try: ws.print_titles = tpl.print_titles
-    except: pass
-    for attr in ("orientation","paperSize","fitToWidth","fitToHeight","scale","firstPageNumber","useFirstPageNumber"):
-        try: setattr(ws.page_setup, attr, getattr(tpl.page_setup, attr))
-        except: pass
-    for attr in ("left","right","top","bottom","header","footer"):
-        try: setattr(ws.page_margins, attr, getattr(tpl.page_margins, attr))
-        except: pass
+    try:
+        ws.freeze_panes = tpl.freeze_panes
+    except:
+        pass
+    try:
+        ws.print_area = tpl.print_area
+    except:
+        pass
+    try:
+        ws.print_titles = tpl.print_titles
+    except:
+        pass
+    for attr in (
+    "orientation", "paperSize", "fitToWidth", "fitToHeight", "scale", "firstPageNumber", "useFirstPageNumber"):
+        try:
+            setattr(ws.page_setup, attr, getattr(tpl.page_setup, attr))
+        except:
+            pass
+    for attr in ("left", "right", "top", "bottom", "header", "footer"):
+        try:
+            setattr(ws.page_margins, attr, getattr(tpl.page_margins, attr))
+        except:
+            pass
     for col, dim in tpl.column_dimensions.items():
         if dim.width is not None:
             ws.column_dimensions[col].width = dim.width
@@ -687,6 +740,7 @@ def clone_sheet_keep_print(wb, tpl_name: str, title: str):
         if dim.height is not None:
             ws.row_dimensions[row].height = dim.height
     return ws
+
 
 def ensure_total_pages(wb, base: str, total_needed: int):
     """
@@ -701,15 +755,17 @@ def ensure_total_pages(wb, base: str, total_needed: int):
     Returns:
         list[str]: 排序后的工作表名称列表
     """
-    names = [s for s in wb.sheetnames if s==base or re.match(rf'^{re.escape(base)}（\d+）$', s)]
-    names = sorted(names, key=lambda n: 0 if n==base else int(re.findall(r'（(\d+)）', n)[0]))
+    names = [s for s in wb.sheetnames if s == base or re.match(rf'^{re.escape(base)}（\d+）$', s)]
+    names = sorted(names, key=lambda n: 0 if n == base else int(re.findall(r'（(\d+)）', n)[0]))
     have = len(names)
     start = have + 1
     for _ in range(max(0, total_needed - have)):
         nm = f"{base}（{start}）"
         clone_sheet_keep_print(wb, base, nm)
-        names.append(nm); start += 1
+        names.append(nm);
+        start += 1
     return names
+
 
 def ensure_total_pages_from(wb, tpl_name: str, new_base: str, total_needed: int):
     """
@@ -726,16 +782,17 @@ def ensure_total_pages_from(wb, tpl_name: str, new_base: str, total_needed: int)
         list[str]: 排序后的工作表名称列表
     """
     # 复用已有“其他（n）”等；不足则从 tpl_name 复制
-    names = [s for s in wb.sheetnames if s==new_base or re.match(rf'^{re.escape(new_base)}（\d+）$', s)]
-    names = sorted(names, key=lambda n: 0 if n==new_base else int(re.findall(r'（(\d+)）', n)[0]))
+    names = [s for s in wb.sheetnames if s == new_base or re.match(rf'^{re.escape(new_base)}（\d+）$', s)]
+    names = sorted(names, key=lambda n: 0 if n == new_base else int(re.findall(r'（(\d+)）', n)[0]))
     have = len(names)
     start = have + 1
     for _ in range(max(0, total_needed - have)):
-        nm = f"{new_base}（{start}）" if start>1 else new_base
+        nm = f"{new_base}（{start}）" if start > 1 else new_base
         clone_sheet_keep_print(wb, tpl_name, nm)
         if nm not in names: names.append(nm)
         start += 1
     return names
+
 
 def enforce_mu_font(wb):
     """
@@ -759,6 +816,7 @@ def enforce_mu_font(wb):
                         charset=f.charset, scheme=f.scheme, outline=f.outline
                     )
 
+
 # ===== 数据区定位 / 写入 =====
 def detect_anchors(ws):
     """
@@ -779,22 +837,26 @@ def detect_anchors(ws):
     for r in range(1, 60):
         for c in range(1, 40):
             if "读数1" in str(ws.cell(row=r, column=c).value or ""):
-                read_row = r; break
+                read_row = r;
+                break
         if read_row: break
     data_start_row = (read_row + 1) if read_row else 7
     name_col = 2
-    for r in range(1, (read_row or 15)+1):
+    for r in range(1, (read_row or 15) + 1):
         for c in range(1, 30):
             if "构件名称" in str(ws.cell(row=r, column=c).value or ""):
-                name_col = c; break
+                name_col = c;
+                break
         if name_col != 2: break
     data_col = None
     if read_row:
         for c in range(1, 40):
             if "读数1" in str(ws.cell(row=read_row, column=c).value or ""):
-                data_col = c; break
+                data_col = c;
+                break
     data_col = data_col or 5
     return {"name_col": name_col, "data_col": data_col, "data_row": data_start_row, "read_row": read_row or 6}
+
 
 def keep_align(cell, value):
     """
@@ -809,13 +871,14 @@ def keep_align(cell, value):
     old = cell.alignment or Alignment()
     cell.value = value
     cell.alignment = Alignment(
-        horizontal   = old.horizontal,
-        vertical     = old.vertical,
-        wrap_text    = old.wrap_text,
-        textRotation = old.textRotation,
-        indent       = old.indent,
-        shrinkToFit  = old.shrinkToFit
+        horizontal=old.horizontal,
+        vertical=old.vertical,
+        wrap_text=old.wrap_text,
+        textRotation=old.textRotation,
+        indent=old.indent,
+        shrinkToFit=old.shrinkToFit
     )
+
 
 def write_block(ws, anchors, pos, item):
     """
@@ -830,11 +893,13 @@ def write_block(ws, anchors, pos, item):
         item: 数据块对象（expand_blocks返回的单个元素）
     """
     r0 = anchors["data_row"] + pos * PER_LINE_PER_BLOCK
-    name_col = anchors["name_col"]; data_col = anchors["data_col"]
+    name_col = anchors["name_col"];
+    data_col = anchors["data_col"]
     keep_align(ws.cell(row=r0, column=name_col), item["name"])
     for dr in range(PER_LINE_PER_BLOCK):
         for dc in range(9):
-            ws.cell(row=r0+dr, column=data_col+dc).value = item["data"][dr][dc]
+            ws.cell(row=r0 + dr, column=data_col + dc).value = item["data"][dr][dc]
+
 
 def slash_block(ws, anchors, pos):
     """
@@ -848,11 +913,13 @@ def slash_block(ws, anchors, pos):
         pos: 数据块位置（0-4，int）
     """
     r0 = anchors["data_row"] + pos * PER_LINE_PER_BLOCK
-    name_col = anchors["name_col"]; data_col = anchors["data_col"]
+    name_col = anchors["name_col"];
+    data_col = anchors["data_col"]
     keep_align(ws.cell(row=r0, column=name_col), "/")
     for dr in range(PER_LINE_PER_BLOCK):
         for dc in range(9):
-            ws.cell(row=r0+dr, column=data_col+dc).value = "/"
+            ws.cell(row=r0 + dr, column=data_col + dc).value = "/"
+
 
 def slash_tail(ws, anchors, used_pos):
     """
@@ -867,6 +934,7 @@ def slash_tail(ws, anchors, used_pos):
     """
     for rem in range(used_pos, BLOCKS_PER_SHEET):
         slash_block(ws, anchors, rem)
+
 
 # ===== 元信息固定坐标 / 仪器识别 =====
 def top_left_of_merged(ws, r, c):
@@ -887,6 +955,7 @@ def top_left_of_merged(ws, r, c):
             return rng.min_row, rng.min_col
     return r, c
 
+
 def apply_meta_fixed(wb, categories_present, meta: dict):
     """
     向Excel工作表写入固定元信息（工程名称、委托编号）到指定位置。
@@ -900,12 +969,15 @@ def apply_meta_fixed(wb, categories_present, meta: dict):
     """
     for ws in wb.worksheets:
         if not any(ws.title.startswith(p) for p in categories_present): continue
+
         def _set_rc(r, c, v):
             if not v: return
-            r0,c0 = top_left_of_merged(ws, r, c)
+            r0, c0 = top_left_of_merged(ws, r, c)
             ws.cell(row=r0, column=c0).value = v
-        _set_rc(3, 3,  meta.get("proj"))   # C3
+
+        _set_rc(3, 3, meta.get("proj"))  # C3
         _set_rc(3, 12, meta.get("order"))  # L3
+
 
 def find_avg_col(ws, read_row_guess: int):
     """
@@ -925,6 +997,7 @@ def find_avg_col(ws, read_row_guess: int):
         if "平均值" in v: return c
     return 13  # 兜底 M 列
 
+
 def detect_instrument(ws):
     """
     根据平均值列数据自动识别仪器型号（23-90或24-57）。
@@ -939,12 +1012,13 @@ def detect_instrument(ws):
     anc = detect_anchors(ws)
     avg_col = find_avg_col(ws, anc["read_row"])
     start_r = anc["data_row"]
-    end_r   = min(start_r + 24, ws.max_row)
+    end_r = min(start_r + 24, ws.max_row)
     for r in range(start_r, end_r + 1):
         v = ws.cell(row=r, column=avg_col).value
         if v is None: continue
         if isinstance(v, (int, float)):
-            num = float(v); return "24-57" if num >= 10 else "23-90"
+            num = float(v);
+            return "24-57" if num >= 10 else "23-90"
         s = str(v).strip()
         if s == "/": continue
         m = re.search(r"-?\d+(?:\.\d+)?", s)
@@ -952,6 +1026,7 @@ def detect_instrument(ws):
             num = float(m.group(0))
             return "24-57" if num >= 10 else "23-90"
     return "23-90"
+
 
 def write_instrument(ws, text):
     """
@@ -965,6 +1040,7 @@ def write_instrument(ws, text):
     """
     r0, c0 = top_left_of_merged(ws, 33, 5)  # E33:H33 合并左上
     ws.cell(row=r0, column=c0).value = text
+
 
 def apply_meta_on_pages(wb, pages: list[str], date_str: str, env_str: str, auto_instrument=True):
     """
@@ -982,14 +1058,17 @@ def apply_meta_on_pages(wb, pages: list[str], date_str: str, env_str: str, auto_
     if not pages: return
     for name in pages:
         ws = wb[name]
+
         def _set_rc(r, c, v):
             if not v: return
-            r0,c0 = top_left_of_merged(ws, r, c)
+            r0, c0 = top_left_of_merged(ws, r, c)
             ws.cell(row=r0, column=c0).value = v
+
         _set_rc(33, 11, date_str)  # K33
-        _set_rc(34, 11, env_str)   # K34
+        _set_rc(34, 11, env_str)  # K34
         if auto_instrument:
             write_instrument(ws, detect_instrument(ws))
+
 
 # ===== 规范化 =====
 def normalize_date(text: str) -> str:
@@ -1007,13 +1086,16 @@ def normalize_date(text: str) -> str:
     s = (text or "").strip()
     if not s: return ""
     if re.fullmatch(r"\d{8}", s):
-        y, m, d = int(s[:4]), int(s[4:6]), int(s[6:8]); return f"{y}年{m}月{d}日"
-    s2 = s.replace("年"," ").replace("月"," ").replace("日"," ")
+        y, m, d = int(s[:4]), int(s[4:6]), int(s[6:8]);
+        return f"{y}年{m}月{d}日"
+    s2 = s.replace("年", " ").replace("月", " ").replace("日", " ")
     for ch in ".-/，,": s2 = s2.replace(ch, " ")
     nums = re.findall(r"\d+", s2)
     if len(nums) >= 3:
-        y,m,d = map(int, nums[:3]); return f"{y}年{m}月{d}日"
+        y, m, d = map(int, nums[:3]);
+        return f"{y}年{m}月{d}日"
     return s
+
 
 def normalize_env(text: str) -> str:
     """
@@ -1083,7 +1165,7 @@ def _parse_dates_simple(input_str: str):
         if not norm:
             # 尝试 Y M D 这种被空格/逗号拆开的情况：2025 8 27
             if re.fullmatch(r"\d{4}", tok) and i + 2 < len(tokens) \
-               and tokens[i + 1].isdigit() and tokens[i + 2].isdigit():
+                    and tokens[i + 1].isdigit() and tokens[i + 2].isdigit():
                 norm = _normalize_date_token(
                     f"{tok}-{tokens[i + 1]}-{tokens[i + 2]}",
                     base_year or cur_year
@@ -1114,8 +1196,9 @@ def _parse_dates_simple(input_str: str):
 
     return res, ignored
 
-
     # ===== 交互 =====
+
+
 HELP_HOME = f"""
 ====================  The Unification | 帮助中心  ====================
 this application was made by {AUTHOR} in 2025 summer
@@ -1146,128 +1229,129 @@ this application was made by {AUTHOR} in 2025 summer
 """
 
 HELP_TEXTS = {
-        "1":
-"""====================  Mode 1 | 按日期分桶（默认稳健）  ====================
+    "1":
+        """====================  Mode 1 | 按日期分桶（默认稳健）  ====================
+        
+        适用场景：
+          将全部构件按日期分配到多天；支持“后面的日子优先”或“前面的日子优先”。
+        
+        操作流程：
+          1) 选择模式：输入 1
+          2) 若存在“支撑”，在进入“支撑”配置之前选择分桶策略：
+               - 1 = 按编号（WZ号）   2 = 按楼层（与钢柱/钢梁一致）
+          3) 录入“日期桶”（1~10 天；日期格式见帮助首页）
+          4) 选择规则重叠优先级：
+               - 回车 = “后面的日子优先”（默认），n = “前面的日子优先”
+          5) 预览分配结果：
+               - 回车 = 确认生成
+               - n    = 取消
+               - a    = 将未分配构件并入最后一天
+          6) 系统按天写入页池并批量写元信息（日期、温度、仪器）
+        
+        输出与命名：
+          • 工作表命名沿用模板页池（“钢柱/钢梁/支撑/其他（n）”）
+          • 日期写 K33，温度写 K34；仪器型号自动识别
+        
+        输入示例：
+          2025-08-27, 2025/8/28, 20250829
+        
+        返回/退出：
+          • 任意步骤输入 q 返回上一步
+          • 完成或出错后，自动回到路径输入；仅在路径输入处输入 Q 才退出
+        =====================================================================
+        """,
+    "2":
+        """====================  Mode 2 | 按楼层断点（按层出报）  ====================
+        
+        适用场景：
+          按“楼层范围”定义若干桶（如 1F-3F、4F-6F、B3-B1、屋面/机房层），
+          每个桶映射到一天（或多天）与温度。
+        
+        操作流程：
+          1) 选择模式：输入 2
+          2) 若存在“支撑”，在进入“支撑”配置之前选择分桶策略：
+               - 1 = 按编号（WZ号）   2 = 按楼层（与钢柱/钢梁一致）
+          3) 定义楼层桶（顺序自动规范：B* → 1F↑ → 机房层 → 屋面）
+          4) 为每个桶指定日期与（可选）温度；也可按需使用统一设置
+          5) 预览 → 确认 → 写入
+        
+        输出与命名：
+          • 工作表命名沿用模板页池；日期/温度写入 K33/K34；仪器自动识别
+        
+        输入示例：
+          桶：B3-B1、1F-5F、屋面
+          日期：2025.8.29
+        
+        返回/退出：
+          • 任意步骤输入 q 返回上一步
+          • 完成或出错后，自动回到路径输入；仅在路径输入处输入 Q 才退出
+        =====================================================================
+        """,
+    "3":
+        """====================  Mode 3 | 单日模式（最简方案）  ====================
+        
+        适用场景：
+          全量构件归入同一日期与温度；快速制表或整单同日检测。
+        
+        操作流程：
+          1) 选择模式：输入 3
+          2) 若存在“支撑”，在进入“支撑”配置之前选择分桶策略：
+               - 1 = 按编号（WZ号）   2 = 按楼层（与钢柱/钢梁一致）
+          3) 输入日期与（可选）温度
+          4) 写入页池；自动分页（25 行/页 = 5 组 × 5 行）
+        
+        输出与命名：
+          • 工作表命名沿用模板页池；日期/温度写入 K33/K34；仪器自动识别
+        
+        输入示例：
+          20250101   2025年1月1日   2025 1 1
+        
+        返回/退出：
+          • 任意步骤输入 q 返回上一步
+          • 完成或出错后，自动回到路径输入；仅在路径输入处输入 Q 才退出
+        =====================================================================
+        """,
+    "4":
+        """================  Mode 4 | 楼层 × 日期 切片（灵活均分/配额）  ================
+        
+        适用场景：
+          同一楼层需要分配到多天；可选择“均分”或“每日上限（配额）”进行切片。
+        
+        核心概念：
+          • 共用计划：为一批选定楼层设置“同一套”日期清单与每日上限（空=均分）
+          • 默认计划（*）：为“未单独配置”的楼层设置的通用计划
+          • 兜底：若仍有未分配数据，可二选一：
+              A) 统一日期/温度一次性分配；或
+              B) 回落到 Mode 1（日期分桶）流程
+        
+        操作流程：
+          1) 选择模式：输入 4
+          2) 选择适用楼层（留空=全部已识别楼层；支持 B2、5F、屋面、机房层）
+          3) 是否“共用计划”：
+              - y = 共用：一次录入日期清单与每日上限（空=均分），套用到所有选定楼层
+              - 回车 = 分别设置：按楼层逐一录入日期与每日上限
+          4) 存在“未配置楼层”时，是否创建默认计划（*）：
+              - y = 创建：再录入一次日期与每日上限，通用于剩余楼层
+              - 回车 = 不创建：留待后续兜底
+          5) 分发与兜底：
+              - 已配置楼层：立即切片、分页、写入
+              - 未配置楼层：选择统一日期/温度一次性分配，或回落到 Mode 1 分桶流程
+        
+        输出与命名：
+          • 工作表命名沿用模板页池；按“日期切片”分组批量写入 K33/K34；仪器自动识别
+          • 顺序稳定：楼层排序 B* → 1F↑ → 机房层 → 屋面；同层内按 WZ 编号 → 数字 → 字典序
+        
+        输入示例：
+          共用：楼层 5F, 6F, B2；日期 2025-08-27, 20250828, 2025年8月29日；上限 60
+          分别：5F → 8/27, 8/28（上限空=均分）；6F → 2025.8.27（上限 40）
+        
+        返回/退出：
+          • 任意步骤输入 q 返回上一步
+          • 完成或出错后，自动回到路径输入；仅在路径输入处输入 Q 才退出
+        =====================================================================
+        """,
+}
 
-适用场景：
-  将全部构件按日期分配到多天；支持“后面的日子优先”或“前面的日子优先”。
-
-操作流程：
-  1) 选择模式：输入 1
-  2) 若存在“支撑”，在进入“支撑”配置之前选择分桶策略：
-       - 1 = 按编号（WZ号）   2 = 按楼层（与钢柱/钢梁一致）
-  3) 录入“日期桶”（1~10 天；日期格式见帮助首页）
-  4) 选择规则重叠优先级：
-       - 回车 = “后面的日子优先”（默认），n = “前面的日子优先”
-  5) 预览分配结果：
-       - 回车 = 确认生成
-       - n    = 取消
-       - a    = 将未分配构件并入最后一天
-  6) 系统按天写入页池并批量写元信息（日期、温度、仪器）
-
-输出与命名：
-  • 工作表命名沿用模板页池（“钢柱/钢梁/支撑/其他（n）”）
-  • 日期写 K33，温度写 K34；仪器型号自动识别
-
-输入示例：
-  2025-08-27, 2025/8/28, 20250829
-
-返回/退出：
-  • 任意步骤输入 q 返回上一步
-  • 完成或出错后，自动回到路径输入；仅在路径输入处输入 Q 才退出
-=====================================================================
-""",
-        "2":
-"""====================  Mode 2 | 按楼层断点（按层出报）  ====================
-
-适用场景：
-  按“楼层范围”定义若干桶（如 1F-3F、4F-6F、B3-B1、屋面/机房层），
-  每个桶映射到一天（或多天）与温度。
-
-操作流程：
-  1) 选择模式：输入 2
-  2) 若存在“支撑”，在进入“支撑”配置之前选择分桶策略：
-       - 1 = 按编号（WZ号）   2 = 按楼层（与钢柱/钢梁一致）
-  3) 定义楼层桶（顺序自动规范：B* → 1F↑ → 机房层 → 屋面）
-  4) 为每个桶指定日期与（可选）温度；也可按需使用统一设置
-  5) 预览 → 确认 → 写入
-
-输出与命名：
-  • 工作表命名沿用模板页池；日期/温度写入 K33/K34；仪器自动识别
-
-输入示例：
-  桶：B3-B1、1F-5F、屋面
-  日期：2025.8.29
-
-返回/退出：
-  • 任意步骤输入 q 返回上一步
-  • 完成或出错后，自动回到路径输入；仅在路径输入处输入 Q 才退出
-=====================================================================
-""",
-        "3":
-"""====================  Mode 3 | 单日模式（最简方案）  ====================
-
-适用场景：
-  全量构件归入同一日期与温度；快速制表或整单同日检测。
-
-操作流程：
-  1) 选择模式：输入 3
-  2) 若存在“支撑”，在进入“支撑”配置之前选择分桶策略：
-       - 1 = 按编号（WZ号）   2 = 按楼层（与钢柱/钢梁一致）
-  3) 输入日期与（可选）温度
-  4) 写入页池；自动分页（25 行/页 = 5 组 × 5 行）
-
-输出与命名：
-  • 工作表命名沿用模板页池；日期/温度写入 K33/K34；仪器自动识别
-
-输入示例：
-  20250101   2025年1月1日   2025 1 1
-
-返回/退出：
-  • 任意步骤输入 q 返回上一步
-  • 完成或出错后，自动回到路径输入；仅在路径输入处输入 Q 才退出
-=====================================================================
-""",
-        "4":
-"""================  Mode 4 | 楼层 × 日期 切片（灵活均分/配额）  ================
-
-适用场景：
-  同一楼层需要分配到多天；可选择“均分”或“每日上限（配额）”进行切片。
-
-核心概念：
-  • 共用计划：为一批选定楼层设置“同一套”日期清单与每日上限（空=均分）
-  • 默认计划（*）：为“未单独配置”的楼层设置的通用计划
-  • 兜底：若仍有未分配数据，可二选一：
-      A) 统一日期/温度一次性分配；或
-      B) 回落到 Mode 1（日期分桶）流程
-
-操作流程：
-  1) 选择模式：输入 4
-  2) 选择适用楼层（留空=全部已识别楼层；支持 B2、5F、屋面、机房层）
-  3) 是否“共用计划”：
-      - y = 共用：一次录入日期清单与每日上限（空=均分），套用到所有选定楼层
-      - 回车 = 分别设置：按楼层逐一录入日期与每日上限
-  4) 存在“未配置楼层”时，是否创建默认计划（*）：
-      - y = 创建：再录入一次日期与每日上限，通用于剩余楼层
-      - 回车 = 不创建：留待后续兜底
-  5) 分发与兜底：
-      - 已配置楼层：立即切片、分页、写入
-      - 未配置楼层：选择统一日期/温度一次性分配，或回落到 Mode 1 分桶流程
-
-输出与命名：
-  • 工作表命名沿用模板页池；按“日期切片”分组批量写入 K33/K34；仪器自动识别
-  • 顺序稳定：楼层排序 B* → 1F↑ → 机房层 → 屋面；同层内按 WZ 编号 → 数字 → 字典序
-
-输入示例：
-  共用：楼层 5F, 6F, B2；日期 2025-08-27, 20250828, 2025年8月29日；上限 60
-  分别：5F → 8/27, 8/28（上限空=均分）；6F → 2025.8.27（上限 40）
-
-返回/退出：
-  • 任意步骤输入 q 返回上一步
-  • 完成或出错后，自动回到路径输入；仅在路径输入处输入 Q 才退出
-=====================================================================
-""",
-    }
 
 def tutorial_browser():
     """显示模式教程浏览器。"""
@@ -1283,6 +1367,7 @@ def tutorial_browser():
             viewed = True
         else:
             print("仅接受 1/2/3/4 或回车/q。")
+
 
 def prompt_path(prompt, default: Path) -> Path:
     """
@@ -1307,6 +1392,7 @@ def prompt_path(prompt, default: Path) -> Path:
             return p
         print(f"❌ 找不到文件：{p}")
 
+
 def prompt_floor_breaks(label: str):
     """
     交互式获取楼层断点列表，支持无效输入并返回空值处理。
@@ -1325,6 +1411,7 @@ def prompt_floor_breaks(label: str):
         return sorted({int(x) for x in txt.split()})
     except:
         return []
+
 
 # ===== 日期分桶（泛化到任意类别） =====
 def _parse_int_ranges(rule: str):
@@ -1353,14 +1440,21 @@ def _parse_int_ranges(rule: str):
         else:
             m = re.match(r"^\d+$", tok)
             if m:
-                v = int(tok); res.append((v, v))
+                v = int(tok);
+                res.append((v, v))
             else:
                 m = re.match(r"(?i)^[FL]\s*(\d+)$", tok) or re.match(r"(?i)^(\d+)\s*[FL]$", tok)
                 if m:
-                    v = int(m.group(1)); res.append((v, v))
-                elif tok in ("屋面", "屋顶层", "顶层", "机房层"):
-                    res.append((10**6 - (0 if tok != "机房层" else 1), 10**6 - (0 if tok != "机房层" else 1)))
+                    v = int(m.group(1));
+                    res.append((v, v))
+                else:
+                    lt = tok.lower()
+                    if lt.startswith(("屋面", "屋顶层", "顶层", "wm", "dc")):
+                        res.append((10 ** 6, 10 ** 6))
+                    elif lt.startswith(("机房层", "jf")):
+                        res.append((10 ** 6 - 1, 10 ** 6 - 1))
     return res
+
 
 def parse_rule(text: str):
     """
@@ -1382,6 +1476,7 @@ def parse_rule(text: str):
     if s.lower() in ("*", "all") or s in ("全部", "所有"): return {"enabled": True, "ranges": []}
     return {"enabled": True, "ranges": _parse_int_ranges(s)}
 
+
 def _in_ranges(val: int, ranges):
     """
     判断值是否在指定的范围列表内，支持空范围表示“全部包含”。
@@ -1395,10 +1490,11 @@ def _in_ranges(val: int, ranges):
         bool: 在范围内返回True，否则返回False
     """
     if ranges is None: return False
-    if ranges == []: return True    # noqa
-    for a,b in ranges:
+    if ranges == []: return True  # noqa
+    for a, b in ranges:
         if a <= val <= b: return True
     return False
+
 
 def _wz_no(name: str):
     """
@@ -1419,6 +1515,7 @@ def _wz_no(name: str):
     m = re.search(r"支撑\s*[-–—]?\s*(\d+)", name)
     return int(m.group(1)) if m else None
 
+
 def _match_keywords(name: str, kws):
     """
     判断构件名称是否包含任意关键词（忽略大小写）。
@@ -1435,6 +1532,7 @@ def _match_keywords(name: str, kws):
     s = name.lower()
     return any(k.lower() in s for k in kws)
 
+
 def prompt_mode():
     """模式选择，支持 q 返回。"""
     txt = ask("模式选择：1) 按日期分桶  2) 按楼层断点  3) 单日模式  4) 楼层+日期配额")
@@ -1443,6 +1541,7 @@ def prompt_mode():
     if txt in ("2", "3", "4"):
         return txt
     return "1"
+
 
 def prompt_bucket_priority():
     """询问规则重叠优先级。"""
@@ -1478,10 +1577,11 @@ def prompt_date_buckets(categories_present):
         n_txt = ask("共有几天（1-10，回车=1）：")
         if not n_txt: n = 1; break
         if n_txt.isdigit() and 1 <= int(n_txt) <= 10:
-            n = int(n_txt); break
+            n = int(n_txt);
+            break
         print("请输入 1-10 之间的整数。")
     buckets = []
-    for i in range(1, n+1):
+    for i in range(1, n + 1):
         print(f"\n—— 第 {i} 天 ——")
         d = ask("📅 日期（20250101 / 2025年1月1日 / 2025 1 1 / 2025.1.1 / 2025-1-1 / 1-1 / 01-01）：")
         e = ask("🌡 环境温度（24 / 24℃ / 24 度 / 24 C）：")
@@ -1507,6 +1607,7 @@ def prompt_date_buckets(categories_present):
         })
     return buckets
 
+
 def assign_by_buckets(cat_groups: dict, buckets, later_priority=True):
     """
     将构件数据组按日期桶规则分配到对应天数，支持规则重叠处理。
@@ -1529,7 +1630,7 @@ def assign_by_buckets(cat_groups: dict, buckets, later_priority=True):
     # 输出：cat_byb[cat][bucket_index] = [groups...];  remain_by_cat[cat] = [groups...]
     cat_byb = {cat: {i: [] for i in range(len(buckets))} for cat in cat_groups}
     assigned = {cat: set() for cat in cat_groups}
-    order = range(len(buckets)-1, -1, -1) if later_priority else range(len(buckets))
+    order = range(len(buckets) - 1, -1, -1) if later_priority else range(len(buckets))
     for cat, groups in cat_groups.items():
         for idx, g in enumerate(groups):
             # 计算匹配
@@ -1551,11 +1652,14 @@ def assign_by_buckets(cat_groups: dict, buckets, later_priority=True):
                 else:
                     ok = _in_ranges(fl, rule["ranges"])
                 if ok and _match_keywords(g["name"], b["kws"]):
-                    cat_byb[cat][bi].append(g); assigned[cat].add(idx); break
+                    cat_byb[cat][bi].append(g);
+                    assigned[cat].add(idx);
+                    break
 
-    remain_by_cat = {cat: [g for i,g in enumerate(groups) if i not in assigned[cat]]
+    remain_by_cat = {cat: [g for i, g in enumerate(groups) if i not in assigned[cat]]
                      for cat, groups in cat_groups.items()}
     return cat_byb, remain_by_cat
+
 
 def preview_buckets_generic(cat_byb, remain_by_cat, buckets, categories_present):
     """
@@ -1577,16 +1681,17 @@ def preview_buckets_generic(cat_byb, remain_by_cat, buckets, categories_present)
              - 是否将未分配数据并入最后一天（bool）
      """
     print("\n🧾 预览：")
-    for i,b in enumerate(buckets, start=1):
+    for i, b in enumerate(buckets, start=1):
         parts = []
         for cat in categories_present:
-            parts.append(f"{cat} {len(cat_byb[cat][i-1])}")
+            parts.append(f"{cat} {len(cat_byb[cat][i - 1])}")
         print(f"  第{i}天 〔{b['date'] or b['date_raw'] or '未填日期'} / {b['env'] or '未填温度'}〕 → " + "、".join(parts))
     if any(remain_by_cat[cat] for cat in categories_present):
         print("  ⚠️ 未分配：", end="")
         print("、".join(f"{cat} {len(remain_by_cat[cat])}" for cat in categories_present if remain_by_cat[cat]))
     ans = ask("确认生成吗？(回车=是 / n=否 / a=把未分配并入最后一天)：", lower=True)
     return (ans != "n"), (ans == "a")
+
 
 def expand_blocks_by_bucket(cat_byb):
     """
@@ -1602,6 +1707,7 @@ def expand_blocks_by_bucket(cat_byb):
     # 返回：blocks_by_cat[cat][bucket_index] = [blocks...]
     return {cat: {bi: expand_blocks(lst, PER_LINE_PER_BLOCK) for bi, lst in byb.items()}
             for cat, byb in cat_byb.items()}
+
 
 def ensure_pages_slices_for_cat(wb, cat: str, blocks_by_bucket_for_cat: dict):
     """
@@ -1619,7 +1725,10 @@ def ensure_pages_slices_for_cat(wb, cat: str, blocks_by_bucket_for_cat: dict):
     Returns:
         list[list[str]]: 按桶划分的工作表名称列表（每个元素为一个桶的工作表）
     """
-    def need_pages(lst): return math.ceil(len(lst)/BLOCKS_PER_SHEET) if lst else 0
+
+    def need_pages(lst):
+        return math.ceil(len(lst) / BLOCKS_PER_SHEET) if lst else 0
+
     page_need_each = [need_pages(blocks_by_bucket_for_cat.get(i, [])) for i in range(len(blocks_by_bucket_for_cat))]
     total_need = sum(page_need_each)
     if total_need == 0:
@@ -1628,10 +1737,13 @@ def ensure_pages_slices_for_cat(wb, cat: str, blocks_by_bucket_for_cat: dict):
         pages_all = ensure_total_pages_from(wb, "钢柱", "其他", total_need)
     else:
         pages_all = ensure_total_pages(wb, cat, total_need)
-    slices = []; p = 0
+    slices = [];
+    p = 0
     for n in page_need_each:
-        slices.append(pages_all[p:p+n]); p += n
+        slices.append(pages_all[p:p + n]);
+        p += n
     return slices
+
 
 def make_target_order_generic(pages_slices_by_cat, categories_present):
     """
@@ -1659,21 +1771,26 @@ def make_target_order_generic(pages_slices_by_cat, categories_present):
             target += sl
     return target
 
+
 # ===== Excel 写入带进度 =====
 class Prog:
-    def __init__(self, total:int, label:str="写入 Excel"):
+    def __init__(self, total: int, label: str = "写入 Excel"):
         self.total = max(1, total)
         self.done = 0
         self.label = label
+
     def tick(self, k=1):
         self.done += k
         pct = int(self.done * 100 / self.total)
         sys.stdout.write(f"\r📊 {self.label}：{self.done}/{self.total}（{pct}%）")
         sys.stdout.flush()
-    def finish(self):
-        sys.stdout.write("\n"); sys.stdout.flush()
 
-def fill_blocks_to_pages(wb, pages_slice, blocks, prog:Prog|None=None):
+    def finish(self):
+        sys.stdout.write("\n");
+        sys.stdout.flush()
+
+
+def fill_blocks_to_pages(wb, pages_slice, blocks, prog: Prog | None = None):
     """
     将数据块填充到指定的Excel工作表，支持进度跟踪。
 
@@ -1696,12 +1813,14 @@ def fill_blocks_to_pages(wb, pages_slice, blocks, prog:Prog|None=None):
         if prog: prog.tick(1)
         pos += 1
         if pos == BLOCKS_PER_SHEET:
-            page_idx += 1; pos = 0
+            page_idx += 1;
+            pos = 0
     if page_idx < len(pages_slice) and pos != 0:
         ws = wb[pages_slice[page_idx]]
         slash_tail(ws, detect_anchors(ws), pos)
 
-def cleanup_unused_sheets(wb, used_names, bases=("钢柱","钢梁","支撑","其他")):
+
+def cleanup_unused_sheets(wb, used_names, bases=("钢柱", "钢梁", "支撑", "其他")):
     """
     清理Excel中未使用的指定类型工作表，减少冗余。
 
@@ -1723,6 +1842,7 @@ def cleanup_unused_sheets(wb, used_names, bases=("钢柱","钢梁","支撑","其
         to_remove = to_remove[:-1]
     for ws in to_remove:
         wb.remove(ws)
+
 
 def _distribute_by_dates(items, date_entries):
     """按日期列表将项目分配到各天。"""
@@ -1751,6 +1871,7 @@ def _distribute_by_dates(items, date_entries):
             res.append((d, env, items[cursor:cursor + take]))
             cursor += take
     return res
+
 
 def _prompt_dates_and_limits():
     """交互获取日期、每日数量及环境温度。"""
@@ -1788,6 +1909,7 @@ def _prompt_dates_and_limits():
         envs.append(ask(f"{d} 的环境温度（回车=不写）：\n→ "))
     return list(zip(dates, limits, envs))
 
+
 def _summarize_plan(tag, plan, all_floors=None):
     """输出楼层计划摘要，便于用户确认。"""
 
@@ -1809,6 +1931,7 @@ def _summarize_plan(tag, plan, all_floors=None):
         if miss:
             miss_txt = " ".join(sorted(miss, key=_floor_sort_key_by_label))
             print(f"未覆盖的楼层：{miss_txt} （稍后统一处理/回落到日期分桶）")
+
 
 def _prompt_plan_for_floors(floors, shared=True):
     """针对给定楼层集合交互生成计划。"""
@@ -1851,6 +1974,7 @@ def _prompt_plan_for_floors(floors, shared=True):
         plan[f] = _prompt_dates_and_limits()
     return plan
 
+
 def prompt_mode4_plan(floors_by_cat, categories_present):
     """模式4交互，分别为各类别获取楼层计划。"""
     print("各类别楼层：")
@@ -1865,7 +1989,7 @@ def prompt_mode4_plan(floors_by_cat, categories_present):
         print(f"\n[{cat}]")
         share = ask("这些楼层用同一套日期/数量吗？（y=是，回车=分别设置）\n→ ") == "y"
         plans[cat] = _prompt_plan_for_floors(fls, shared=share)
-            # —— 新增：给未指定楼层兜底 ——
+        # —— 新增：给未指定楼层兜底 ——
         all_floors = sorted(floors_by_cat.get(cat, set()), key=_floor_sort_key_by_label)
         plan_for_cat = plans[cat]
         specified = {f for f in plan_for_cat.keys() if f != "*"}
@@ -1873,13 +1997,14 @@ def prompt_mode4_plan(floors_by_cat, categories_present):
             miss = [f for f in all_floors if f not in specified]
             print(f"👉 {cat} 还有未配置楼层：{' '.join(miss)}")
             ans = ask(
-                    "要不要给“未配置”的楼层用一套通用的日期/数量？（y=是，回车=跳过；未配置的楼层稍后会再统一询问或回落到日期分桶）",
-                    lower=True
+                "要不要给“未配置”的楼层用一套通用的日期/数量？（y=是，回车=跳过；未配置的楼层稍后会再统一询问或回落到日期分桶）",
+                lower=True
             )
             if ans == "y":
-                    plan_for_cat["*"] = _prompt_dates_and_limits()
+                plan_for_cat["*"] = _prompt_dates_and_limits()
         _summarize_plan(cat, plan_for_cat, all_floors)
     return plans
+
 
 def mode4_run(wb, grouped, categories_present):
     """执行模式4：按楼层和日期写入Excel。"""
@@ -1900,7 +2025,7 @@ def mode4_run(wb, grouped, categories_present):
 
     for (cat, fl), items in cf_groups.items():
         items.sort(key=lambda x: (
-        int(re.search(r"\d+", x["name"]).group()) if re.search(r"\d+", x["name"]) else 10 ** 9, x["name"]))
+            int(re.search(r"\d+", x["name"]).group()) if re.search(r"\d+", x["name"]) else 10 ** 9, x["name"]))
         plan_for_cat = plan_dict.get(cat, {})
         plan = plan_for_cat.get(fl) or plan_for_cat.get("*")
         if not plan:
@@ -1975,7 +2100,8 @@ def mode4_run(wb, grouped, categories_present):
     order = sorted(range(len(buckets)), key=lambda i: buckets[i]["date"])
     buckets = [buckets[i] for i in order]
     for cat in CATEGORY_ORDER:
-        blocks_by_cat_bucket[cat] = {new_i: blocks_by_cat_bucket[cat].get(old_i, []) for new_i, old_i in enumerate(order)}
+        blocks_by_cat_bucket[cat] = {new_i: blocks_by_cat_bucket[cat].get(old_i, []) for new_i, old_i in
+                                     enumerate(order)}
 
     # —— 统一写页 ——
     cats_in_use = [c for c in CATEGORY_ORDER if blocks_by_cat_bucket[c]]
@@ -2020,6 +2146,7 @@ def try_handle_mode4(mode, wb, grouped, categories_present) -> list | None:
         return None
     return mode4_run(wb, grouped, categories_present)
 
+
 # ===== 旧法子模式 =====
 def prompt_break_submode(has_gz, has_gl):
     """
@@ -2038,10 +2165,11 @@ def prompt_break_submode(has_gz, has_gl):
     """
     if has_gz and has_gl:
         t = ask("断点子模式：1) 柱梁共用断点（简便）  2) 柱梁分别断点  3) 无断点（整单同一天）")
-        return t if t in ("1","2","3") else "1"
+        return t if t in ("1", "2", "3") else "1"
     else:
         t = ask("断点子模式：仅存在单类（或加“其他”） → 3) 无断点  或  2) 分别断点（按各自断点）")
-        return t if t in ("2","3") else "3"
+        return t if t in ("2", "3") else "3"
+
 
 # ===== 主流程 =====
 def run_mode(mode: str, wb, grouped, categories_present):
@@ -2063,7 +2191,10 @@ def run_mode(mode: str, wb, grouped, categories_present):
         if sub == "3":
             # 无断点：按顺序依次排
             pages_by_cat = {}
-            def need_pages(lst): return math.ceil(len(lst)/BLOCKS_PER_SHEET) if lst else 0
+
+            def need_pages(lst):
+                return math.ceil(len(lst) / BLOCKS_PER_SHEET) if lst else 0
+
             for cat in categories_present:
                 total = need_pages(blocks_by_cat[cat])
                 if total == 0:
@@ -2088,7 +2219,8 @@ def run_mode(mode: str, wb, grouped, categories_present):
                     fill_blocks_to_pages(wb, pages_by_cat[cat], blocks_by_cat[cat], prog)
             prog.finish()
 
-            d = normalize_date(ask("📅 整单日期（20250101 / 2025年1月1日 / 2025 1 1 / 2025.1.1 / 2025-1-1 / 1-1 / 01-01；回车=不写）：") or "")
+            d = normalize_date(
+                ask("📅 整单日期（20250101 / 2025年1月1日 / 2025 1 1 / 2025.1.1 / 2025-1-1 / 1-1 / 01-01；回车=不写）：") or "")
             e = normalize_env(ask("🌡 整单环境（回车=不写）：") or "")
             apply_meta_on_pages(wb, target, d, e, auto_instrument=True)
             used_names_total = target
@@ -2105,8 +2237,8 @@ def run_mode(mode: str, wb, grouped, categories_present):
                     if support_bucket_strategy == "floor":
                         breaks_by_cat[cat] = prompt_floor_breaks(cat)
                     else:
-                        breaks_by_cat[cat] = []   # 支撑不做断点分段
-                elif cat in ("钢柱","钢梁") and same_breaks is not None:
+                        breaks_by_cat[cat] = []  # 支撑不做断点分段
+                elif cat in ("钢柱", "钢梁") and same_breaks is not None:
                     breaks_by_cat[cat] = same_breaks
                 else:
                     breaks_by_cat[cat] = prompt_floor_breaks(cat)
@@ -2123,7 +2255,9 @@ def run_mode(mode: str, wb, grouped, categories_present):
             rounds = max((max(byseg[cat].keys()) if byseg[cat] else 0) for cat in categories_present) + 1
 
             # 预分配页
-            def pages_needed(lst): return math.ceil(len(lst)/BLOCKS_PER_SHEET) if lst else 0
+            def pages_needed(lst):
+                return math.ceil(len(lst) / BLOCKS_PER_SHEET) if lst else 0
+
             pages_pool_by_cat = {}
             for cat in categories_present:
                 total_pages = sum(pages_needed(byseg[cat].get(i, [])) for i in range(rounds))
@@ -2137,13 +2271,13 @@ def run_mode(mode: str, wb, grouped, categories_present):
 
             # 计算最终顺序：按轮次交错（柱→梁→支撑→其他）
             target = []
-            cursor = {cat:0 for cat in categories_present}
+            cursor = {cat: 0 for cat in categories_present}
             for i in range(rounds):
                 for cat in CATEGORY_ORDER:
                     if cat not in categories_present: continue
                     need = pages_needed(byseg[cat].get(i, []))
                     pool = pages_pool_by_cat[cat]
-                    target += pool[cursor[cat]:cursor[cat]+need]
+                    target += pool[cursor[cat]:cursor[cat] + need]
                     cursor[cat] += need
 
             # 排序成最终顺序
@@ -2154,14 +2288,14 @@ def run_mode(mode: str, wb, grouped, categories_present):
             # 写入（带进度）
             total_blocks = sum(len(byseg[cat].get(i, [])) for cat in categories_present for i in range(rounds))
             prog = Prog(total_blocks, "写入 Excel")
-            cursor = {cat:0 for cat in categories_present}
+            cursor = {cat: 0 for cat in categories_present}
             for i in range(rounds):
                 for cat in CATEGORY_ORDER:
                     if cat not in categories_present: continue
                     seg_blocks = byseg[cat].get(i, [])
                     need = pages_needed(seg_blocks)
                     pool = pages_pool_by_cat[cat]
-                    fill_blocks_to_pages(wb, pool[cursor[cat]:cursor[cat]+need], seg_blocks, prog)
+                    fill_blocks_to_pages(wb, pool[cursor[cat]:cursor[cat] + need], seg_blocks, prog)
                     cursor[cat] += need
             prog.finish()
 
@@ -2173,7 +2307,10 @@ def run_mode(mode: str, wb, grouped, categories_present):
         # —— 简单模式：一次日期/温度；不分段；按 CATEGORY_ORDER 排 ——
         blocks_by_cat = {cat: expand_blocks(grouped[cat], PER_LINE_PER_BLOCK) for cat in categories_present}
         pages_by_cat = {}
-        def need_pages(lst): return math.ceil(len(lst)/BLOCKS_PER_SHEET) if lst else 0
+
+        def need_pages(lst):
+            return math.ceil(len(lst) / BLOCKS_PER_SHEET) if lst else 0
+
         for cat in categories_present:
             total = need_pages(blocks_by_cat[cat])
             if total == 0:
@@ -2198,7 +2335,8 @@ def run_mode(mode: str, wb, grouped, categories_present):
                 fill_blocks_to_pages(wb, pages_by_cat[cat], blocks_by_cat[cat], prog)
         prog.finish()
 
-        d = normalize_date(ask("📅 日期：20250101 / 2025年1月1日 / 2025 1 1 / 2025.1.1 / 2025-1-1 / 1-1 / 01-01；（回车=不写）：") or "")
+        d = normalize_date(
+            ask("📅 日期：20250101 / 2025年1月1日 / 2025 1 1 / 2025.1.1 / 2025-1-1 / 1-1 / 01-01；（回车=不写）：") or "")
         e = normalize_env(ask("🌡 环境温度（回车=不写）：") or "")
         apply_meta_on_pages(wb, target, d, e, auto_instrument=True)
         used_names_total = target
@@ -2210,7 +2348,8 @@ def run_mode(mode: str, wb, grouped, categories_present):
         cat_byb, remain_by_cat = assign_by_buckets(grouped, buckets, later_first)
         ok, auto_last = preview_buckets_generic(cat_byb, remain_by_cat, buckets, categories_present)
         if not ok:
-            print("已取消。"); return
+            print("已取消。");
+            return
         if auto_last:
             last = len(buckets) - 1
             for cat in categories_present:
@@ -2252,6 +2391,8 @@ def run_mode(mode: str, wb, grouped, categories_present):
     return used_names_total
 
     # ===== 预处理与模式运行封装 =====
+
+
 def prepare_from_word(src: Path):
     groups_all_tables, all_rows = read_groups_from_doc(src)
     grouped = defaultdict(list)
@@ -2268,7 +2409,6 @@ def prepare_from_word(src: Path):
     save_docx_safe(doc_out, out_docx)
     print(f"✅ 汇总 Word 已保存：{out_docx}")
     return grouped, categories_present
-
 
 
 def run_with_mode(src: Path, grouped, categories_present, meta):
@@ -2308,6 +2448,7 @@ def run_with_mode(src: Path, grouped, categories_present, meta):
     if not _hint_shown:
         print(dark_hint("Maybe you can try entering 'k' the next time you input the file path."))
         _hint_shown = True
+
 
 # ===== 顶层交互循环 =====
 def main():
@@ -2350,8 +2491,6 @@ def main():
             continue
 
 
-
-
 # ===== 读取 Word 分组 =====
 def read_groups_from_doc(path: Path):
     """
@@ -2384,7 +2523,8 @@ def read_groups_from_doc(path: Path):
         if part: all_rows.extend(part)
     return groups_from_your_rows(all_rows), all_rows
 
+
 if __name__ == "__main__":
     main()
 
-                                                                                                        # v4.2.2
+    # v4.2.2
