@@ -41,7 +41,7 @@ from openpyxl.styles import Font, Alignment
 warnings.filterwarnings("ignore", category=SyntaxWarning)
 
 TITLE = "The Unification"
-VERSION = "v 5.0.2"
+VERSION = "v 5.1.2"
 AUTHOR = "LCK"
 
 # ===== 默认路径 =====
@@ -1243,14 +1243,16 @@ HELP_TEXTS = {
           1) 选择模式：输入 1
           2) 若存在“支撑”，在进入“支撑”配置之前选择分桶策略：
                - 1 = 按编号（WZ号）   2 = 按楼层（与钢柱/钢梁一致）
-          3) 录入“日期桶”（1~10 天；日期格式见帮助首页）
-          4) 选择规则重叠优先级：
+          3) 若存在“网架”，按子类（XX/FG/SX/泛称）逐一录入编号范围：
+               - 留空=同上；*=所有；lk=不接收
+          4) 录入“日期桶”（1~10 天；日期格式见帮助首页）
+          5) 选择规则重叠优先级：
                - 回车 = “后面的日子优先”（默认），n = “前面的日子优先”
-          5) 预览分配结果：
+          6) 预览分配结果：
                - 回车 = 确认生成
                - n    = 取消
                - a    = 将未分配构件并入最后一天
-          6) 系统按天写入页池并批量写元信息（日期、温度、仪器）
+          7) 系统按天写入页池并批量写元信息（日期、温度、仪器）
         
         输出与命名：
           • 工作表命名沿用模板页池（“钢柱/钢梁/支撑/其他（n）”）
@@ -1481,6 +1483,11 @@ def parse_rule(text: str):
     return {"enabled": True, "ranges": _parse_int_ranges(s)}
 
 
+def _is_lk(s: str) -> bool:
+    """大小写及全角半角均识别 'lk'。"""
+    return unicodedata.normalize('NFKC', (s or '')).strip().lower() == 'lk'
+
+
 def _in_ranges(val: int, ranges):
     """
     判断值是否在指定的范围列表内，支持空范围表示“全部包含”。
@@ -1665,36 +1672,41 @@ def prompt_date_buckets(categories_present, grouped):
                     prev_rule = None
                     for part in sorted(present_parts - {"GEN"}):
                         placeholder = "同上" if prev_rule else "不接收"
-                        txt = ask(f"🕸 网架-{part} 编号范围（例：1-12 20-25；留空={placeholder}；*=所有）：")
-                        if not txt and prev_rule is not None:
-                            rule = copy.deepcopy(prev_rule)
-                            sub_rules[part] = rule
-                            print(f"✅ 已设置 网架-{part}: {rule}（同上）")
+                        txt = ask(f"🕸 网架-{part} 编号范围（例：1-12 20-25；留空={placeholder}；*=所有；lk=不接收）：")
+                        if _is_lk(txt):
+                            sub_rules[part] = {"enabled": False, "ranges": []}
+                        elif txt == "":
+                            sub_rules[part] = prev_rule or {"enabled": False, "ranges": []}
                         else:
-                            rule = parse_rule(txt)
-                            sub_rules[part] = rule
-                            print(f"✅ 已设置 网架-{part}: {rule}")
-                        prev_rule = rule
+                            sub_rules[part] = parse_rule(txt)
+                        print(f"✅ 已设置 网架-{part}: {sub_rules[part]}")
+                        prev_rule = sub_rules[part] if txt != "" else prev_rule
                     if "GEN" in present_parts:
                         placeholder = "同上" if prev_rule else "不接收"
-                        txt = ask(f"🕸 网架-泛称 编号范围（留空={placeholder}；*=所有）：")
-                        if not txt and prev_rule is not None:
-                            rule = copy.deepcopy(prev_rule)
-                            sub_rules["GEN"] = rule
-                            print(f"✅ 已设置 网架-泛称: {rule}（同上）")
+                        txt = ask(f"🕸 网架-泛称 编号范围（留空={placeholder}；*=所有；lk=不接收）：")
+                        if _is_lk(txt):
+                            sub_rules["GEN"] = {"enabled": False, "ranges": []}
+                        elif txt == "":
+                            sub_rules["GEN"] = prev_rule or {"enabled": False, "ranges": []}
                         else:
-                            rule = parse_rule(txt)
-                            sub_rules["GEN"] = rule
-                            print(f"✅ 已设置 网架-泛称: {rule}")
+                            sub_rules["GEN"] = parse_rule(txt)
+                        print(f"✅ 已设置 网架-泛称: {sub_rules['GEN']}")
+                        prev_rule = sub_rules["GEN"] if txt != "" else prev_rule
                 else:
                     for part in sorted(present_parts - {"GEN"}):
-                        txt = ask(f"🕸 网架-{part} 楼层规则（例：1-3 5 7-10 屋面；留空=不接收；*=不限）：")
-                        rule = parse_rule(txt)
+                        txt = ask(f"🕸 网架-{part} 楼层规则（例：1-3 5 7-10 屋面；留空=不接收；*=不限；lk=不接收）：")
+                        if _is_lk(txt):
+                            rule = {"enabled": False, "ranges": []}
+                        else:
+                            rule = parse_rule(txt)
                         sub_rules[part] = rule
                         print(f"✅ 已设置 网架-{part}: {rule}")
                     if "GEN" in present_parts:
-                        txt = ask("🕸 网架-泛称 楼层规则（留空=不接收；*=不限）：")
-                        rule = parse_rule(txt)
+                        txt = ask("🕸 网架-泛称 楼层规则（留空=不接收；*=不限；lk=不接收）：")
+                        if _is_lk(txt):
+                            rule = {"enabled": False, "ranges": []}
+                        else:
+                            rule = parse_rule(txt)
                         sub_rules["GEN"] = rule
                         print(f"✅ 已设置 网架-泛称: {rule}")
                 rules[cat] = {"strategy": net_bucket_strategy, "parts": sub_rules}
@@ -2646,4 +2658,4 @@ def read_groups_from_doc(path: Path):
 if __name__ == "__main__":
     main()
 
-    # v5.0.2
+    # v5.1.2
