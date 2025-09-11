@@ -86,7 +86,7 @@ RESET = "\x1b[0m"
 
 def dark_hint(text: str) -> str:
     """
-    输出极深灰提示（几乎黑）。优先用 truecolor；否则退回 256 色 232。
+    输出极深灰提示（几乎黑）。优先用 truecolor；否则退回 256色232。
     """
     # truecolor（24-bit）
     try:
@@ -137,7 +137,8 @@ def show_help_browser():
 
 def show_easter_egg():
     """Easter egg message for curious users."""
-    print("\n🎉这是一个小彩蛋，致正在北京漂泊的你："
+    print(
+        "\n          🎉这是一个小彩蛋，致正在北京漂泊的你："
 
           """\n          嘿，今天过得怎样？
           
@@ -215,7 +216,6 @@ def is_valid_path(p: str) -> bool:
 class FileInUse(Exception):
     pass
 
-
 def _is_in_use_error(e: Exception) -> bool:
     # Windows 常见：WinError 32（共享冲突），或 PermissionError 13
     msg = str(e).lower()
@@ -226,7 +226,6 @@ def _is_in_use_error(e: Exception) -> bool:
                "permission denied" in msg)
     return bool(code32 or perm13 or hit_msg)
 
-
 def load_workbook_safe(path, **kw):
     from openpyxl import load_workbook
     try:
@@ -236,7 +235,6 @@ def load_workbook_safe(path, **kw):
             raise FileInUse(f"Excel 模板/文件被占用：{path}") from e
         raise
 
-
 def save_workbook_safe(wb, path):
     try:
         wb.save(path)
@@ -245,7 +243,6 @@ def save_workbook_safe(wb, path):
             raise FileInUse(f"无法保存 Excel（被占用）：{path}") from e
         raise
 
-
 def save_docx_safe(doc, path):
     try:
         doc.save(str(path))
@@ -253,7 +250,6 @@ def save_docx_safe(doc, path):
         if _is_in_use_error(e):
             raise FileInUse(f"无法保存 Word（被占用）：{path}") from e
         raise
-
 
 # ===== Word 汇总生成 =====
 NEED_COLS = 11
@@ -268,7 +264,6 @@ HEADER = [
     "测点4 读数1", "测点4 读数2",
     "涂层厚度平均值"
 ]
-
 
 def ensure_cells(row, need=NEED_COLS):
     """
@@ -285,7 +280,6 @@ def ensure_cells(row, need=NEED_COLS):
         for t in tc.xpath('.//*[local-name()="t"]'): t.text = ''
         row._tr.append(tc)  # noqa
 
-
 def color_row_red(row):
     """
     将表格行的文字颜色设置为红色，用于表头高亮显示。
@@ -300,7 +294,6 @@ def color_row_red(row):
             for run in p.runs:
                 run.font.color.rgb = RGBColor(255, 0, 0)
 
-
 def is_data_table(tbl):
     """
     判断Word表格是否为有效数据表格（含测点和平均值信息）。
@@ -314,7 +307,6 @@ def is_data_table(tbl):
     """
     first_three = " ".join(c.text for r in tbl.rows[:3] for c in r.cells)
     return "测点1" in first_three and "平均值" in first_three
-
 
 def detect_layout(tbl):
     """
@@ -341,7 +333,6 @@ def detect_layout(tbl):
             col_avg = i
     is_beam = len(col_vals) == 3  # 梁 3 组，柱/支撑 4 组
     return col_vals, col_avg, is_beam
-
 
 def extract_rows_with_progress(tbl, ti: int, T: int):  # noqa
     """
@@ -404,7 +395,6 @@ def extract_rows_with_progress(tbl, ti: int, T: int):  # noqa
     sys.stdout.write(f"\r📝 读取 Word：表 {ti}/{T}（100%）\n");
     sys.stdout.flush()
     return rows
-
 
 def build_summary_doc_with_progress(rows):
     """
@@ -485,7 +475,6 @@ def build_summary_doc_with_progress(rows):
     sys.stdout.flush()
     return doc
 
-
 def set_doc_font_progress(doc, pt=DEFAULT_FONT_PT):
     """
     统一Word文档中所有文字的字体大小，带实时进度提示。
@@ -525,7 +514,6 @@ def set_doc_font_progress(doc, pt=DEFAULT_FONT_PT):
                         sys.stdout.flush()
     sys.stdout.write("\n");
     sys.stdout.flush()
-
 
 # ===== rows → groups（8读数+平均值）=====
 def groups_from_your_rows(rows_all_tables):
@@ -2658,4 +2646,4 @@ def read_groups_from_doc(path: Path):
 if __name__ == "__main__":
     main()
 
-    # v5.1.2
+                                                                                                            # v5.1.2
