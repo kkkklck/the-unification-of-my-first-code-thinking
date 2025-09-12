@@ -827,34 +827,42 @@ def _normalize_digits(s: str) -> str:
 
 
 def _is_mu_block(block: dict) -> bool:
-    """
-    只看 5×8 读数格（不含平均值列）。任一格里有长度 ≥ MU_DIGITS_THRESHOLD 的数字序列 → μ。
-    兜底：能解析成数值且 abs(value) ≥ 1000 也判 μ（例如 '4070.0'）。
-    """
+    # """判断一个块是否含 μ 值。
+    #
+    # 仅检查每行前 8 个读数格：
+    #   * 若某格为纯 \d{4,} 数字串 → μ；
+    #   * 若某格能解析为数值且绝对值 ≥1000，且不含单位/文字 → μ。
+    # """
     for row in block.get("data", []):
-        for v in (row[:8] if isinstance(row, (list, tuple)) else []):
+        cells = row[:8] if isinstance(row, (list, tuple)) else []
+        for v in cells:
             if v in (None, "/", "／"):
                 continue
-            digits = _normalize_digits(v)
-            if digits and len(digits) >= MU_DIGITS_THRESHOLD:
+            s = unicodedata.normalize("NFKC", str(v)).strip()
+            if re.fullmatch(r"\d{4,}", s):
                 return True
-            try:
-                val = float(unicodedata.normalize("NFKC", str(v)).replace(",", ""))
-                if abs(val) >= 1000:
-                    return True
-            except Exception:
-                pass
+            if re.fullmatch(r"[\d.,]+", s):
+                try:
+                    if abs(float(s.replace(",", ""))) >= 1000:
+                        return True
+                except Exception:
+                    pass
     return False
 
 
 def _ensure_mu_pages_shared(wb, base: str, mu_tpl: str, start_idx: int, count: int) -> list[str]:
     """
     基于 μ 母版（如 '钢梁μ'）批量生成编号页，序号从 start_idx+1 起。
-    返回生成（或已有）的 μ 页名列表：['钢梁μ（4）', '钢梁μ（5）', ...]
+    若 start_idx 为 0，则复用模板页作为首张。
+    返回生成（或已有）的 μ 页名列表：['钢梁μ', '钢梁μ（2）', ...]
     """
     pages = []
-    for i in range(start_idx + 1, start_idx + count + 1):
-        nm = f"{base}μ（{i}）"
+    use_tpl_first = start_idx == 0 and mu_tpl in wb.sheetnames
+    for idx in range(start_idx + 1, start_idx + count + 1):
+        if use_tpl_first and idx == start_idx + 1:
+            pages.append(mu_tpl)
+            continue
+        nm = f"{base}μ（{idx}）"
         if nm not in wb.sheetnames:
             if mu_tpl not in wb.sheetnames:
                 raise RuntimeError(f"缺少 μ 模板：{mu_tpl}")
@@ -865,17 +873,12 @@ def _ensure_mu_pages_shared(wb, base: str, mu_tpl: str, start_idx: int, count: i
 
 def cleanup_unused_mu_templates(wb, used_pages: list[str]):
     """
-    清掉本次没用到的“裸 μ 模板页”（如 '钢梁μ'）。若已生成任何 '钢梁μ（n）' 就不删。
+    清掉本次没用到的“裸 μ 模板页”（如 '钢梁μ'）。
     """
     used = set(used_pages or [])
     base_candidates = ["钢柱μ", "钢梁μ", "支撑μ", "网架μ", "钢柱 μ", "钢梁 μ", "支撑 μ", "网架 μ"]
-
-    def has_numbered(base: str) -> bool:
-        prefix = base.rstrip()
-        return any(name.startswith(prefix + "（") or name.startswith(prefix + "(") for name in used)
-
     for base in base_candidates:
-        if base in wb.sheetnames and not has_numbered(base):
+        if base in wb.sheetnames and base not in used:
             try:
                 wb.remove(wb[base])
             except Exception:
@@ -2638,48 +2641,49 @@ def run_mode(mode: str, wb, grouped, categories_present):
                     seg = segment_index(floor_of(b["name"]), breaks_by_cat[cat])
                     byseg[cat][seg].append(b)
 
-        # 给每个段做 μ-aware 切片，累加出整单顺序
-        rounds = max((max(byseg[cat].keys()) if byseg[cat] else 0) for cat in categories_present) + 1
-        target = []
-        blocks_round = []
+        # 先对每个类别一次性切片，保证编号连续
+        pages_slices_by_cat = {}
+        blocks_slices_by_cat = {}
+        for cat in categories_present:
+            seg_dict = byseg[cat]
+            if cat == "其他":
+                pages_slices_by_cat[cat] = []
+                blocks_slices_by_cat[cat] = []
+                for seg in sorted(seg_dict.keys()):
+                    seg_blocks = seg_dict[seg]
+                    need = pages_needed(seg_blocks)
+                    pages_batch = [] if not need else ensure_total_pages_from(wb, "钢柱", "其他", need)
+                    pages_slices_by_cat[cat].append(pages_batch)
+                    blocks_slices_by_cat[cat].append(seg_blocks)
+            else:
+                pages_slices_by_cat[cat], blocks_slices_by_cat[cat] = ensure_pages_slices_for_cat_muaware(
+                    wb, cat, seg_dict
+                )
 
+        # 构造 (pages, blocks) 队列，按 类×段 逐对写入
+        rounds = max(len(pages_slices_by_cat[c]) for c in categories_present)
+        pairs = []
         for i in range(rounds):
-            # 每轮按类别顺序交错
-            pages_piece = []
-            blocks_piece = []
             for cat in CATEGORY_ORDER:
                 if cat not in categories_present:
                     continue
-                seg_blocks = byseg[cat].get(i, [])
-                if not seg_blocks:
-                    continue
-                if cat == "其他":
-                    need = pages_needed(seg_blocks)
-                    pages_piece_cat = [] if not need else ensure_total_pages_from(wb, "钢柱", "其他", need)
-                    blocks_piece_cat = seg_blocks
-                else:
-                    pages_slices, blocks_slices = ensure_pages_slices_for_cat_muaware(
-                        wb, cat, {0: seg_blocks}
-                    )
-                    pages_piece_cat = pages_slices[0]
-                    blocks_piece_cat = blocks_slices[0]
+                p_list = pages_slices_by_cat[cat]
+                b_list = blocks_slices_by_cat[cat]
+                if i < len(p_list) and p_list[i]:
+                    pairs.append((p_list[i], b_list[i]))
 
-                pages_piece += pages_piece_cat
-                blocks_piece += blocks_piece_cat
+        target = []
+        prog = Prog(sum(len(b) for _, b in pairs), "写入 Excel")
+        for pages, blocks_piece in pairs:
+            target += pages
+            fill_blocks_to_pages(wb, pages, blocks_piece, prog)
+        prog.finish()
 
-            target += pages_piece
-            blocks_round += blocks_piece
-
-        # 排序
+        # 调整顺序并写入元信息
         for idx, name in enumerate(target):
             cur = wb.sheetnames.index(name)
             if cur != idx:
                 wb.move_sheet(wb[name], idx - cur)
-
-        # 写入
-        prog = Prog(len(blocks_round), "写入 Excel")
-        fill_blocks_to_pages(wb, target, blocks_round, prog)
-        prog.finish()
 
         apply_meta_on_pages(wb, target, "", "", auto_instrument=True)
         cleanup_unused_mu_templates(wb, target)
