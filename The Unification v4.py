@@ -41,17 +41,18 @@ from openpyxl.styles import Font, Alignment
 warnings.filterwarnings("ignore", category=SyntaxWarning)
 
 TITLE = "The Unification"
-VERSION = "v 5.1.2"
+VERSION = "v 6.1.5"
 AUTHOR = "LCK"
 
 # ===== 默认路径 =====
 WORD_SRC_DEFAULT = Path(r"D:\eg\eg.docx")
-XLSX_WITH_SUPPORT_DEFAULT = Path(r"E:\公司尝试\防火原始文件\防火excel模板.xlsx")
+XLSX_WITH_SUPPORT_DEFAULT = Path(r"E:\公司尝试\防火原始文件\防火excel模板μ.xlsx")
 DEFAULT_FONT_PT = 9
 
 # 每页 5 组、每组 5 行、每行 8 读数+平均值
 PER_LINE_PER_BLOCK = 5
 BLOCKS_PER_SHEET = 5
+MU_DIGITS_THRESHOLD = 4  # 需求：四位数→μ
 
 # 本次运行只提示一次
 _hint_shown = False
@@ -811,9 +812,141 @@ def ensure_total_pages_from(wb, tpl_name: str, new_base: str, total_needed: int)
     for _ in range(max(0, total_needed - have)):
         nm = f"{new_base}（{start}）" if start > 1 else new_base
         clone_sheet_keep_print(wb, tpl_name, nm)
-        if nm not in names: names.append(nm)
+        if nm not in names:
+            names.append(nm)
         start += 1
     return names
+
+# ========= μ 判定 & μ 页创建 & 清理 =========
+
+def _normalize_digits(s: str) -> str:
+    """把全角/带逗号/空格/点的数字统一成 ASCII 连续数字串：'４,070.0' → '40700'。"""
+    s = unicodedata.normalize("NFKC", str(s or ""))
+    parts = re.findall(r"\d+", s)
+    return "".join(parts)
+
+
+def _is_mu_block(block: dict) -> bool:
+    """
+    只看 5×8 读数格（不含平均值列）。任一格里有长度 ≥ MU_DIGITS_THRESHOLD 的数字序列 → μ。
+    兜底：能解析成数值且 abs(value) ≥ 1000 也判 μ（例如 '4070.0'）。
+    """
+    for row in block.get("data", []):
+        for v in (row[:8] if isinstance(row, (list, tuple)) else []):
+            if v in (None, "/", "／"):
+                continue
+            digits = _normalize_digits(v)
+            if digits and len(digits) >= MU_DIGITS_THRESHOLD:
+                return True
+            try:
+                val = float(unicodedata.normalize("NFKC", str(v)).replace(",", ""))
+                if abs(val) >= 1000:
+                    return True
+            except Exception:
+                pass
+    return False
+
+
+def _ensure_mu_pages_shared(wb, base: str, mu_tpl: str, start_idx: int, count: int) -> list[str]:
+    """
+    基于 μ 母版（如 '钢梁μ'）批量生成编号页，序号从 start_idx+1 起。
+    返回生成（或已有）的 μ 页名列表：['钢梁μ（4）', '钢梁μ（5）', ...]
+    """
+    pages = []
+    for i in range(start_idx + 1, start_idx + count + 1):
+        nm = f"{base}μ（{i}）"
+        if nm not in wb.sheetnames:
+            if mu_tpl not in wb.sheetnames:
+                raise RuntimeError(f"缺少 μ 模板：{mu_tpl}")
+            clone_sheet_keep_print(wb, mu_tpl, nm)
+        pages.append(nm)
+    return pages
+
+
+def cleanup_unused_mu_templates(wb, used_pages: list[str]):
+    """
+    清掉本次没用到的“裸 μ 模板页”（如 '钢梁μ'）。若已生成任何 '钢梁μ（n）' 就不删。
+    """
+    used = set(used_pages or [])
+    base_candidates = ["钢柱μ", "钢梁μ", "支撑μ", "网架μ", "钢柱 μ", "钢梁 μ", "支撑 μ", "网架 μ"]
+
+    def has_numbered(base: str) -> bool:
+        prefix = base.rstrip()
+        return any(name.startswith(prefix + "（") or name.startswith(prefix + "(") for name in used)
+
+    for base in base_candidates:
+        if base in wb.sheetnames and not has_numbered(base):
+            try:
+                wb.remove(wb[base])
+            except Exception:
+                pass
+# ========= μ 分流 + 共用编号（通用分页器） =========
+def split_mu_blocks(blocks):
+    normal, mu = [], []
+    for b in blocks:
+        (mu if _is_mu_block(b) else normal).append(b)
+    return normal, mu
+
+def pages_needed(blocks):
+    return math.ceil(len(blocks) / BLOCKS_PER_SHEET) if blocks else 0
+
+def ensure_pages_slices_for_cat_muaware(wb, cat: str, blocks_by_bucket: dict[int, list]):
+    """
+    μ 逻辑的通用分页器（修正版）：
+      - 同一桶内：先普通页、后 μ 页；同页不混
+      - 序号共用：普通与 μ 跨桶连续编号
+      - 只为需要的普通页创建 sheet，不会因为 μ 页而“补造”普通页
+    返回：pages_slices、blocks_slices（按桶顺序的列表）
+    """
+    buckets = sorted(blocks_by_bucket.keys())
+    pages_slices = []
+    blocks_slices = []
+
+    # 两套计数：一个用于“编号”（普通+μ），一个用于“普通页实际已创建数”
+    total_all_pages = 0            # 普通 + μ，决定 μ 页的起始序号
+    normal_pages_created = 0       # 仅普通页，决定 ensure_total_pages 的目标数
+
+    for i in buckets:
+        all_blocks = blocks_by_bucket.get(i, []) or []
+
+        # 拆分普通/μ
+        normal_blocks = []
+        mu_blocks = []
+        for b in all_blocks:
+            (mu_blocks if _is_mu_block(b) else normal_blocks).append(b)
+
+        need_n = math.ceil(len(normal_blocks) / BLOCKS_PER_SHEET) if normal_blocks else 0
+        need_m = math.ceil(len(mu_blocks) / BLOCKS_PER_SHEET) if mu_blocks else 0
+
+        # 1) 普通页：只按“普通页已创建数 + 本桶普通需求”来确保
+        if need_n:
+            normal_full = ensure_total_pages(wb, cat, normal_pages_created + need_n)
+            # 取出“本桶新分配”的那一段
+            normal_batch = normal_full[normal_pages_created : normal_pages_created + need_n]
+            normal_pages_created += need_n
+        else:
+            normal_batch = []
+
+        # 2) μ 页：编号要接在“已有总页数 + 本桶普通页数”之后
+        #    但不需要为了编号去创建额外的“普通空页”
+        mu_batch = []
+        if need_m:
+            start_idx_for_mu = total_all_pages + need_n  # 先算上同桶普通页
+            mu_batch = _ensure_mu_pages_shared(
+                wb, base=cat, mu_tpl=f"{cat}μ",
+                start_idx=start_idx_for_mu, count=need_m
+            )
+
+        # 3) 更新“总页数”计数（普通+μ）
+        total_all_pages += (need_n + need_m)
+
+        # 4) 汇总本桶
+        pages_slices.append(normal_batch + mu_batch)
+        blocks_slices.append(normal_blocks + mu_blocks)
+
+    return pages_slices, blocks_slices
+
+
 
 
 def enforce_mu_font(wb):
@@ -2413,185 +2546,205 @@ def prompt_break_submode(has_gz, has_gl):
 
 # ===== 主流程 =====
 def run_mode(mode: str, wb, grouped, categories_present):
-    """按指定模式执行一次导出。"""
+    """按指定模式执行一次导出（全模式支持 μ 逻辑；mode4 暂保持原样流程）。"""
     global support_bucket_strategy, net_bucket_strategy
     support_bucket_strategy = None
     net_bucket_strategy = None
+
+    # 先交给 mode4 的专用处理（不动它内部逻辑）
     res = try_handle_mode4(mode, wb, grouped, categories_present)
     if res is not None:
         return res
 
+    # ============ mode 2：按楼层断点 ============
     if mode == "2":
-        # —— 旧法：断点 ——
         has_gz = "钢柱" in categories_present
         has_gl = "钢梁" in categories_present
         sub = prompt_break_submode(has_gz, has_gl)
 
-        # 准备 blocks
-        blocks_by_cat = {cat: expand_blocks(grouped[cat], PER_LINE_PER_BLOCK) for cat in categories_present}
+        blocks_by_cat = {cat: expand_blocks(grouped[cat], PER_LINE_PER_BLOCK)
+                         for cat in categories_present}
 
+        # —— 子模式 3：无断点，整类一次性排（也用 μ-aware）——
         if sub == "3":
-            # 无断点：按顺序依次排
             pages_by_cat = {}
-
-            def need_pages(lst):
-                return math.ceil(len(lst) / BLOCKS_PER_SHEET) if lst else 0
+            blocks_by_cat_ordered = {}
 
             for cat in categories_present:
-                total = need_pages(blocks_by_cat[cat])
-                if total == 0:
-                    pages_by_cat[cat] = []
+                blocks_all = blocks_by_cat[cat]
+                if cat == "其他":
+                    need = pages_needed(blocks_all)
+                    pages_by_cat[cat] = [] if not need else ensure_total_pages_from(wb, "钢柱", "其他", need)
+                    blocks_by_cat_ordered[cat] = blocks_all
                 else:
-                    if cat == "其他":
-                        pages_by_cat[cat] = ensure_total_pages_from(wb, "钢柱", "其他", total)
-                    else:
-                        pages_by_cat[cat] = ensure_total_pages(wb, cat, total)
+                    # 复用 μ-aware，视作“只有一个桶”，索引 0
+                    pages_slices, blocks_slices = ensure_pages_slices_for_cat_muaware(
+                        wb, cat, {0: blocks_all}
+                    )
+                    pages_by_cat[cat] = pages_slices[0]
+                    blocks_by_cat_ordered[cat] = blocks_slices[0]
+
             target = []
             for cat in CATEGORY_ORDER:
                 if cat in categories_present:
                     target += pages_by_cat[cat]
             for idx, name in enumerate(target):
                 cur = wb.sheetnames.index(name)
-                if cur != idx: wb.move_sheet(wb[name], idx - cur)
+                if cur != idx:
+                    wb.move_sheet(wb[name], idx - cur)
 
-            total_blocks = sum(len(blocks_by_cat[cat]) for cat in categories_present)
+            total_blocks = sum(len(blocks_by_cat_ordered[cat]) for cat in categories_present)
             prog = Prog(total_blocks, "写入 Excel")
             for cat in CATEGORY_ORDER:
                 if cat in categories_present:
-                    fill_blocks_to_pages(wb, pages_by_cat[cat], blocks_by_cat[cat], prog)
+                    fill_blocks_to_pages(wb, pages_by_cat[cat], blocks_by_cat_ordered[cat], prog)
             prog.finish()
 
-            d = normalize_date(
-                ask("📅 整单日期（20250101 / 2025年1月1日 / 2025 1 1 / 2025.1.1 / 2025-1-1 / 1-1 / 01-01；回车=不写）：") or "")
+            d = normalize_date(ask("📅 整单日期（回车=不写）：") or "")
             e = normalize_env(ask("🌡 整单环境（回车=不写）：") or "")
             apply_meta_on_pages(wb, target, d, e, auto_instrument=True)
-            used_names_total = target
+            cleanup_unused_mu_templates(wb, target)
+            return target
 
-        else:
-            # 分别断点（若同时有柱&梁，可选择共用；“其他”总是用自己的断点）
-            same_breaks = None
-            if has_gz and has_gl and sub == "1":
-                same_breaks = prompt_floor_breaks("钢柱/钢梁（共用）")
-            breaks_by_cat = {}
-            for cat in categories_present:
-                if cat == "支撑":
-                    prompt_support_strategy_for_bucket()
-                    if support_bucket_strategy == "floor":
-                        breaks_by_cat[cat] = prompt_floor_breaks(cat)
-                    else:
-                        breaks_by_cat[cat] = []  # 支撑不做断点分段
-                elif cat in ("钢柱", "钢梁") and same_breaks is not None:
+        # —— 子模式 1/2：按断点分段（每段也是 μ-aware）——
+        same_breaks = None
+        if has_gz and has_gl and sub == "1":
+            same_breaks = prompt_floor_breaks("钢柱/钢梁（共用）")
+
+        breaks_by_cat = {}
+        for cat in categories_present:
+            if cat == "支撑":
+                prompt_support_strategy_for_bucket()
+                if support_bucket_strategy == "floor":
+                    breaks_by_cat[cat] = prompt_floor_breaks(cat)
+                else:
+                    breaks_by_cat[cat] = []  # 支撑不分段
+            elif cat in ("钢柱", "钢梁"):
+                if ((cat == "钢柱" and "钢梁" in categories_present) or
+                    (cat == "钢梁" and "钢柱" in categories_present)) and same_breaks is not None:
                     breaks_by_cat[cat] = same_breaks
                 else:
                     breaks_by_cat[cat] = prompt_floor_breaks(cat)
+            else:
+                breaks_by_cat[cat] = prompt_floor_breaks(cat)
 
-            # 分段
-            byseg = {cat: defaultdict(list) for cat in categories_present}
-            for cat in categories_present:
-                if cat == "支撑" and support_bucket_strategy != "floor":
-                    byseg[cat][0] = blocks_by_cat[cat]
-                else:
-                    for b in blocks_by_cat[cat]:
-                        seg = segment_index(floor_of(b["name"]), breaks_by_cat[cat])
-                        byseg[cat][seg].append(b)
-            rounds = max((max(byseg[cat].keys()) if byseg[cat] else 0) for cat in categories_present) + 1
+        # 建段：用 floor_of + segment_index
+        byseg = {cat: defaultdict(list) for cat in categories_present}
+        for cat in categories_present:
+            if cat == "支撑" and support_bucket_strategy != "floor":
+                byseg[cat][0] = blocks_by_cat[cat]
+            else:
+                for b in blocks_by_cat[cat]:
+                    seg = segment_index(floor_of(b["name"]), breaks_by_cat[cat])
+                    byseg[cat][seg].append(b)
 
-            # 预分配页
-            def pages_needed(lst):
-                return math.ceil(len(lst) / BLOCKS_PER_SHEET) if lst else 0
+        # 给每个段做 μ-aware 切片，累加出整单顺序
+        rounds = max((max(byseg[cat].keys()) if byseg[cat] else 0) for cat in categories_present) + 1
+        target = []
+        blocks_round = []
 
-            pages_pool_by_cat = {}
-            for cat in categories_present:
-                total_pages = sum(pages_needed(byseg[cat].get(i, [])) for i in range(rounds))
-                if total_pages == 0:
-                    pages_pool_by_cat[cat] = []
-                else:
-                    if cat == "其他":
-                        pages_pool_by_cat[cat] = ensure_total_pages_from(wb, "钢柱", "其他", total_pages)
-                    else:
-                        pages_pool_by_cat[cat] = ensure_total_pages(wb, cat, total_pages)
-
-            # 计算最终顺序：按轮次交错（柱→梁→支撑→其他）
-            target = []
-            cursor = {cat: 0 for cat in categories_present}
-            for i in range(rounds):
-                for cat in CATEGORY_ORDER:
-                    if cat not in categories_present: continue
-                    need = pages_needed(byseg[cat].get(i, []))
-                    pool = pages_pool_by_cat[cat]
-                    target += pool[cursor[cat]:cursor[cat] + need]
-                    cursor[cat] += need
-
-            # 排序成最终顺序
-            for idx, name in enumerate(target):
-                cur = wb.sheetnames.index(name)
-                if cur != idx: wb.move_sheet(wb[name], idx - cur)
-
-            # 写入（带进度）
-            total_blocks = sum(len(byseg[cat].get(i, [])) for cat in categories_present for i in range(rounds))
-            prog = Prog(total_blocks, "写入 Excel")
-            cursor = {cat: 0 for cat in categories_present}
-            for i in range(rounds):
-                for cat in CATEGORY_ORDER:
-                    if cat not in categories_present: continue
-                    seg_blocks = byseg[cat].get(i, [])
+        for i in range(rounds):
+            # 每轮按类别顺序交错
+            pages_piece = []
+            blocks_piece = []
+            for cat in CATEGORY_ORDER:
+                if cat not in categories_present:
+                    continue
+                seg_blocks = byseg[cat].get(i, [])
+                if not seg_blocks:
+                    continue
+                if cat == "其他":
                     need = pages_needed(seg_blocks)
-                    pool = pages_pool_by_cat[cat]
-                    fill_blocks_to_pages(wb, pool[cursor[cat]:cursor[cat] + need], seg_blocks, prog)
-                    cursor[cat] += need
-            prog.finish()
+                    pages_piece_cat = [] if not need else ensure_total_pages_from(wb, "钢柱", "其他", need)
+                    blocks_piece_cat = seg_blocks
+                else:
+                    pages_slices, blocks_slices = ensure_pages_slices_for_cat_muaware(
+                        wb, cat, {0: seg_blocks}
+                    )
+                    pages_piece_cat = pages_slices[0]
+                    blocks_piece_cat = blocks_slices[0]
 
-            # 断点法：整单不分日期，仪器按页自动识别
-            apply_meta_on_pages(wb, target, "", "", auto_instrument=True)
-            used_names_total = target
+                pages_piece += pages_piece_cat
+                blocks_piece += blocks_piece_cat
 
+            target += pages_piece
+            blocks_round += blocks_piece
+
+        # 排序
+        for idx, name in enumerate(target):
+            cur = wb.sheetnames.index(name)
+            if cur != idx:
+                wb.move_sheet(wb[name], idx - cur)
+
+        # 写入
+        prog = Prog(len(blocks_round), "写入 Excel")
+        fill_blocks_to_pages(wb, target, blocks_round, prog)
+        prog.finish()
+
+        apply_meta_on_pages(wb, target, "", "", auto_instrument=True)
+        cleanup_unused_mu_templates(wb, target)
+        return target
+
+    # ============ mode 3：单日模式（已有 μ 逻辑，这里接到 μ-aware） ============
     elif mode == "3":
-        # —— 简单模式：一次日期/温度；不分段；按 CATEGORY_ORDER 排 ——
-        blocks_by_cat = {cat: expand_blocks(grouped[cat], PER_LINE_PER_BLOCK) for cat in categories_present}
         pages_by_cat = {}
-
-        def need_pages(lst):
-            return math.ceil(len(lst) / BLOCKS_PER_SHEET) if lst else 0
+        blocks_by_cat_ordered = {}
 
         for cat in categories_present:
-            total = need_pages(blocks_by_cat[cat])
-            if total == 0:
-                pages_by_cat[cat] = []
+            blocks_all = expand_blocks(grouped[cat], PER_LINE_PER_BLOCK)
+            if cat == "其他":
+                need = pages_needed(blocks_all)
+                pages_by_cat[cat] = [] if not need else ensure_total_pages_from(wb, "钢柱", "其他", need)
+                blocks_by_cat_ordered[cat] = blocks_all
             else:
-                if cat == "其他":
-                    pages_by_cat[cat] = ensure_total_pages_from(wb, "钢柱", "其他", total)
-                else:
-                    pages_by_cat[cat] = ensure_total_pages(wb, cat, total)
+                pages_slices, blocks_slices = ensure_pages_slices_for_cat_muaware(
+                    wb, cat, {0: blocks_all}
+                )
+                pages_by_cat[cat] = pages_slices[0]
+                blocks_by_cat_ordered[cat] = blocks_slices[0]
+
         target = []
         for cat in CATEGORY_ORDER:
             if cat in categories_present:
                 target += pages_by_cat[cat]
         for idx, name in enumerate(target):
             cur = wb.sheetnames.index(name)
-            if cur != idx: wb.move_sheet(wb[name], idx - cur)
+            if cur != idx:
+                wb.move_sheet(wb[name], idx - cur)
 
-        total_blocks = sum(len(blocks_by_cat[cat]) for cat in categories_present)
-        prog = Prog(total_blocks, "写入 Excel")
+        prog = Prog(sum(len(blocks_by_cat_ordered[c]) for c in categories_present), "写入 Excel")
         for cat in CATEGORY_ORDER:
             if cat in categories_present:
-                fill_blocks_to_pages(wb, pages_by_cat[cat], blocks_by_cat[cat], prog)
+                fill_blocks_to_pages(wb, pages_by_cat[cat], blocks_by_cat_ordered[cat], prog)
         prog.finish()
 
-        d = normalize_date(
-            ask("📅 日期：20250101 / 2025年1月1日 / 2025 1 1 / 2025.1.1 / 2025-1-1 / 1-1 / 01-01；（回车=不写）：") or "")
-        e = normalize_env(ask("🌡 环境温度（回车=不写）：") or "")
+        d = normalize_date(ask("📅 日期（回车=不写）：") or "")
+        e = normalize_env(ask("🌡 环境（回车=不写）：") or "")
         apply_meta_on_pages(wb, target, d, e, auto_instrument=True)
-        used_names_total = target
+        cleanup_unused_mu_templates(wb, target)
+        return target
 
-    else:
-        # —— 新法：日期分桶（泛化） ——
+    # ============ mode 1：日期分桶（每个“日桶”也 μ-aware） ============
+    elif mode == "1":
         buckets = prompt_date_buckets(categories_present, grouped)
-        later_first = prompt_bucket_priority()  # 回车=是
+        if buckets is None:
+            return
+
+        later_first = prompt_bucket_priority()
         cat_byb, remain_by_cat = assign_by_buckets(grouped, buckets, later_first)
         ok, auto_last = preview_buckets_generic(cat_byb, remain_by_cat, buckets, categories_present)
         if not ok:
-            print("已取消。");
             return
+
+        unassigned = sum(len(v) for v in remain_by_cat.values())
+        if unassigned:
+            print(f"⚠️ 未指派：{unassigned} 组")
+            auto = ask("是否自动把未指派并入最后一天？（y=是 / 其它=否）", allow_empty=False, lower=True)
+            if auto == "y":
+                auto_last = True
+            elif auto == "q":
+                raise BackStep()
+
         if auto_last:
             last = len(buckets) - 1
             for cat in categories_present:
@@ -2600,37 +2753,51 @@ def run_mode(mode: str, wb, grouped, categories_present):
 
         blocks_by_cat_bucket = expand_blocks_by_bucket(cat_byb)
 
-        # 为每个类别生成每天的页切片
+        # —— 关键：把“每天”的块做成 μ-aware 的切片 ——
         pages_slices_by_cat = {}
+        blocks_slices_by_cat = {}
         for cat in categories_present:
-            pages_slices_by_cat[cat] = ensure_pages_slices_for_cat(wb, cat, blocks_by_cat_bucket[cat])
+            # blocks_by_cat_bucket[cat] 是 dict: day_idx -> blocks(list)
+            pages_slices_by_cat[cat], blocks_slices_by_cat[cat] = ensure_pages_slices_for_cat_muaware(
+                wb, cat, blocks_by_cat_bucket[cat]
+            )
 
-        # 最终顺序：按轮次交错（柱→梁→支撑→其他）
-        target = make_target_order_generic(pages_slices_by_cat, categories_present)
+        # 拼成最终顺序（按天交错：柱→梁→支撑→其他）
+        target = []
+        num_days = len(buckets)
+        for i in range(num_days):
+            for cat in CATEGORY_ORDER:
+                if cat in categories_present:
+                    target += pages_slices_by_cat[cat][i]
+
         for idx, name in enumerate(target):
             cur = wb.sheetnames.index(name)
-            if cur != idx: wb.move_sheet(wb[name], idx - cur)
+            if cur != idx:
+                wb.move_sheet(wb[name], idx - cur)
 
-        # 写入（带进度）
+        # 写入（逐天）
         total_blocks = 0
         for cat in categories_present:
             total_blocks += sum(len(v) for v in blocks_by_cat_bucket[cat].values())
         prog = Prog(total_blocks, "写入 Excel")
 
-        for i in range(len(buckets)):
-            # 逐天写
+        for i in range(num_days):
             day_pages = []
+            day_blocks = []
             for cat in CATEGORY_ORDER:
                 if cat in categories_present:
-                    fill_blocks_to_pages(wb, pages_slices_by_cat[cat][i], blocks_by_cat_bucket[cat].get(i, []), prog)
                     day_pages += pages_slices_by_cat[cat][i]
-            # 日期/环境/仪器
+                    day_blocks += blocks_slices_by_cat[cat][i]
+            fill_blocks_to_pages(wb, day_pages, day_blocks, prog)
             apply_meta_on_pages(wb, day_pages, buckets[i]["date"], buckets[i]["env"], auto_instrument=True)
+
         prog.finish()
+        cleanup_unused_mu_templates(wb, target)
+        return target
 
-        used_names_total = target
+    else:
+        raise ValueError(f"未知的模式：{mode}")
 
-    return used_names_total
 
     # ===== 预处理与模式运行封装 =====
 
@@ -2770,4 +2937,4 @@ def read_groups_from_doc(path: Path):
 if __name__ == "__main__":
     main()
 
-    # v5.1.2
+    # v 6.1.5
