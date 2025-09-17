@@ -46,7 +46,7 @@ AUTHOR = "LCK"
 
 # ===== 默认路径 =====
 WORD_SRC_DEFAULT = Path(r"D:\eg\eg.docx")
-XLSX_WITH_SUPPORT_DEFAULT = Path(r"D:\防火原始文件\防火excel模板μ.xlsx")
+XLSX_WITH_SUPPORT_DEFAULT = Path(r"E:\公司尝试\防火原始文件\防火excel模板μ.xlsx")
 DEFAULT_FONT_PT = 9
 
 # 每页 5 组、每组 5 行、每行 8 读数+平均值
