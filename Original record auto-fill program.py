@@ -1,28 +1,4 @@
-# -*- coding: utf-8 -*-
 
-# 环境说明：(使用须知！！！！！！很重要，必看！！！！！）
-
-# 1. 运行依赖：需安装 Python 3.6 及以上版本（推荐 3.8+，兼容性更优）
-
-# 2. 必要库：需提前安装处理 Word 和 Excel 的专用库，安装命令：
-# pip install openpyxl python-docx
-
-# 若安装速度慢，可使用清华大学镜像：
-# pip install openpyxl python-docx -i https://pypi.tuna.tsinghua.edu.cn/simple
-
-# 3. 系统兼容性：支持 Windows、macOS、Linux 系统，文件路径需按系统格式填写：
-# - Windows 路径示例：E:\eg\文件夹\eg.docx
-# - macOS/Linux 路径示例：/Users/用户名/eg/文件夹/防火２有支撑版.xlsx
-
-# 4. 注意事项：
-# - Word 源文件需为 .docx 格式，数据需存储在含 “测点 1”“平均值” 关键词的表格中（程序仅识别此类表格）
-# - Excel 模板统一使用 “防火２有支撑版.xlsx”，未使用的工作表（如“支撑”）会自动清理
-# - 运行时请关闭目标 Word 和 Excel 文件，避免文件占用导致读写失败或数据损坏
-# - 程序会自动生成 “汇总原始记录.docx” 并存于 Word 同目录，用于数据核对
-# - 支持 “钢柱”“钢梁”“支撑”“网架” 分类，未识别构件自动归为 “其他” 类，共用钢柱模板格式
-# - 生成的 Excel 报告自动命名为 “原始记录自动填写程序_报告版.xlsx”，同名文件会自动加序号（如 “原始记录自动填写程序_报告版 (1).xlsx”）
-# - “μ” 字符自动适配 Times New Roman 字体；仪器型号按平均值自动识别（<10→23-90，≥10→24-57）
-# - 日期分桶模式支持规则重叠处理，默认按 “后面的天” 优先，未分配数据可通过输入 “a” 并入最后一天
 
 # === 原始记录自动填写程序 ===
 
@@ -1027,7 +1003,7 @@ def slash_tail(ws, anchors, used_pos):
         slash_block(ws, anchors, rem)
 
 
-# ===== 元信息固定坐标 / 仪器识别 =====
+# ===== 元信息固定坐标 =====
 def top_left_of_merged(ws, r, c):
     """
     查找合并单元格的左上角单元格坐标，确保值写入正确位置。
@@ -1070,81 +1046,18 @@ def apply_meta_fixed(wb, categories_present, meta: dict):
         _set_rc(3, 12, meta.get("order"))  # L3
 
 
-def find_avg_col(ws, read_row_guess: int):
+def apply_meta_on_pages(wb, pages: list[str], date_str: str, env_str: str):
     """
-    查找Excel工作表中平均值列的位置，优先匹配含“平均”和“厚”的列。
+    向指定Excel工作表写入可选的元信息。
 
-    在指定的读数标题行附近查找含“平均”和“厚”关键词的列，兜底返回M列（第13列）。
-
-    Args:
-        ws: Excel工作表对象（openpyxl.worksheet.worksheet.Worksheet）
-        read_row_guess: 读数标题行猜测位置（int）
-    Returns:
-        int: 平均值列的列号（int）
-    """
-    for c in range(1, 50):
-        v = str(ws.cell(row=read_row_guess, column=c).value or "")
-        if "平均" in v and "厚" in v: return c
-        if "平均值" in v: return c
-    return 13  # 兜底 M 列
-
-
-def detect_instrument(ws):
-    """
-    根据平均值列数据自动识别仪器型号（23-90或24-57）。
-
-    规则：平均值<10 → 23-90；≥10 → 24-57，通过检查数据起始行后的前25行平均值判断。
-
-    Args:
-        ws: Excel工作表对象（openpyxl.worksheet.worksheet.Worksheet）
-    Returns:
-        str: 仪器型号，可能为"23-90"或"24-57"
-    """
-    anc = detect_anchors(ws)
-    avg_col = find_avg_col(ws, anc["read_row"])
-    start_r = anc["data_row"]
-    end_r = min(start_r + 24, ws.max_row)
-    for r in range(start_r, end_r + 1):
-        v = ws.cell(row=r, column=avg_col).value
-        if v is None: continue
-        if isinstance(v, (int, float)):
-            num = float(v);
-            return "24-57" if num >= 10 else "23-90"
-        s = str(v).strip()
-        if s == "/": continue
-        m = re.search(r"-?\d+(?:\.\d+)?", s)
-        if m:
-            num = float(m.group(0))
-            return "24-57" if num >= 10 else "23-90"
-    return "23-90"
-
-
-def write_instrument(ws, text):
-    """
-    向Excel工作表写入仪器型号到固定位置（E33:H33合并区域）。
-
-    定位E33:H33合并区域的左上角单元格，写入仪器型号。
-
-    Args:
-        ws: Excel工作表对象（openpyxl.worksheet.worksheet.Worksheet）
-        text: 仪器型号字符串（str）
-    """
-    r0, c0 = top_left_of_merged(ws, 33, 5)  # E33:H33 合并左上
-    ws.cell(row=r0, column=c0).value = text
-
-
-def apply_meta_on_pages(wb, pages: list[str], date_str: str, env_str: str, auto_instrument=True):
-    """
-    向指定Excel工作表写入日期、环境温度和仪器型号元信息。
-
-    日期写入K33，环境温度写入K34；若开启自动识别，仪器型号根据平均值列数据自动判断并写入。
+    当前仅写入环境温度（K34）。参数 ``date_str`` 保留仅为兼容旧流程，
+    不再向单元格写入日期或仪器信息。
 
     Args:
         wb: Excel工作簿对象（openpyxl.workbook.Workbook）
         pages: 工作表名称列表（list[str]）
-        date_str: 日期字符串（str）
+        date_str: 日期字符串（str），保留参数（当前不写入）
         env_str: 环境温度字符串（str）
-        auto_instrument: 是否自动识别仪器型号，默认True
     """
     if not pages: return
     for name in pages:
@@ -1155,10 +1068,7 @@ def apply_meta_on_pages(wb, pages: list[str], date_str: str, env_str: str, auto_
             r0, c0 = top_left_of_merged(ws, r, c)
             ws.cell(row=r0, column=c0).value = v
 
-        _set_rc(33, 11, date_str)  # K33
         _set_rc(34, 11, env_str)  # K34
-        if auto_instrument:
-            write_instrument(ws, detect_instrument(ws))
 
 
 # ===== 规范化 =====
@@ -1293,7 +1203,7 @@ HELP_HOME = f"""
 this application was made by {AUTHOR} 
 开机三步走（顶层流程）：
   1) 在“请输入 Word 源路径”输入 .docx 路径（输入 help 打开本帮助）
-  2) 读取并生成“汇总原始记录.docx”，随后依次询问【工程名称】【委托编号】
+  2) 读取并生成“汇总原始记录.docx”
   3) 选择模式 1 / 2 / 3 / 4，按向导完成分配与出表
 
 全局快捷键：
@@ -1317,7 +1227,7 @@ this application was made by {AUTHOR}
       - 跨桶编号连续（普通+μ 共用序号），不会为 μ 补造“空普通页”
       - 用过的 μ 页保留，未用的裸 μ 模板（如“钢梁μ”）将被清理
   • 页池命名：沿用模板名（不把日期/楼层写进 Sheet 名）
-  • 元信息落位：K33=日期、K34=环境温度、E33:H33=仪器（自动识别 23-90/24-57）
+  • 元信息落位：K34=环境温度（不再自动写入日期或仪器）
   • 楼层排序：B* → 1F↑ → 机房层 → 屋面；同层内：WZ编号 → 名称中的数字 → 字典序
 
 支撑 / 网架分桶策略（Mode 1/2/3 会先询问）：
@@ -2421,8 +2331,12 @@ def mode4_run(wb, grouped, categories_present):
             blocks = blocks_by_cat_bucket[cat].get(i, [])
             fill_blocks_to_pages(wb, pages, blocks, prog)
             day_pages += pages
-        apply_meta_on_pages(wb, day_pages, normalize_date(buckets[i]["date"]), normalize_env(buckets[i]["env"]),
-                            auto_instrument=True)
+        apply_meta_on_pages(
+            wb,
+            day_pages,
+            normalize_date(buckets[i]["date"]),
+            normalize_env(buckets[i]["env"]),
+        )
     prog.finish()
 
     used_names_total = target
@@ -2520,7 +2434,7 @@ def run_mode(mode: str, wb, grouped, categories_present):
 
             d = normalize_date(ask("📅 整单日期（回车=不写）：") or "")
             e = normalize_env(ask("🌡 整单环境（回车=不写）：") or "")
-            apply_meta_on_pages(wb, target, d, e, auto_instrument=True)
+            apply_meta_on_pages(wb, target, "", e)
             cleanup_unused_mu_templates(wb, target)
             return target
 
@@ -2600,7 +2514,7 @@ def run_mode(mode: str, wb, grouped, categories_present):
             if cur != idx:
                 wb.move_sheet(wb[name], idx - cur)
 
-        apply_meta_on_pages(wb, target, "", "", auto_instrument=True)
+        apply_meta_on_pages(wb, target, "", "")
         cleanup_unused_mu_templates(wb, target)
         return target
 
@@ -2637,9 +2551,8 @@ def run_mode(mode: str, wb, grouped, categories_present):
                 fill_blocks_to_pages(wb, pages_by_cat[cat], blocks_by_cat_ordered[cat], prog)
         prog.finish()
 
-        d = normalize_date(ask("📅 日期（回车=不写）：") or "")
         e = normalize_env(ask("🌡 环境（回车=不写）：") or "")
-        apply_meta_on_pages(wb, target, d, e, auto_instrument=True)
+        apply_meta_on_pages(wb, target, "", e)
         cleanup_unused_mu_templates(wb, target)
         return target
 
@@ -2709,7 +2622,7 @@ def run_mode(mode: str, wb, grouped, categories_present):
                     day_pages += pages_slices_by_cat[cat][i]
                     day_blocks += blocks_slices_by_cat[cat][i]
             fill_blocks_to_pages(wb, day_pages, day_blocks, prog)
-            apply_meta_on_pages(wb, day_pages, buckets[i]["date"], buckets[i]["env"], auto_instrument=True)
+            apply_meta_on_pages(wb, day_pages, buckets[i]["date"], buckets[i]["env"])
 
         prog.finish()
         cleanup_unused_mu_templates(wb, target)
@@ -2797,9 +2710,7 @@ def main():
 
             grouped, categories_present = prepare_from_word(src)
 
-            proj = ask("工程名称（回车可空）：")
-            order = ask("委托编号（回车可空）：")
-            meta = {"proj": proj or "", "order": order or ""}
+            meta = {"proj": "", "order": ""}
 
             run_with_mode(src, grouped, categories_present, meta)
 
@@ -2853,4 +2764,4 @@ def read_groups_from_doc(path: Path):
 if __name__ == "__main__":
     main()
 
-                                                                                                         # v 6.1.5
+                                                                                                         # v 1.0.1
