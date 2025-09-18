@@ -1046,29 +1046,21 @@ def apply_meta_fixed(wb, categories_present, meta: dict):
         _set_rc(3, 12, meta.get("order"))  # L3
 
 
-def apply_meta_on_pages(wb, pages: list[str], date_str: str, env_str: str):
+def apply_meta_on_pages(wb, pages: list[str], date_str: str):
     """
-    向指定Excel工作表写入可选的元信息。
+    向指定 Excel 工作表写入可选元信息的占位函数。
 
-    当前仅写入环境温度（K34）。参数 ``date_str`` 保留仅为兼容旧流程，
-    不再向单元格写入日期或仪器信息。
+    目前未对页内元信息进行写入，保留 ``date_str`` 参数仅为兼容旧流程，
+    便于后续需要时扩展。
 
     Args:
-        wb: Excel工作簿对象（openpyxl.workbook.Workbook）
+        wb: Excel 工作簿对象（openpyxl.workbook.Workbook）
         pages: 工作表名称列表（list[str]）
-        date_str: 日期字符串（str），保留参数（当前不写入）
-        env_str: 环境温度字符串（str）
+        date_str: 日期字符串（str），保留参数（当前未使用）
     """
-    if not pages: return
-    for name in pages:
-        ws = wb[name]
-
-        def _set_rc(r, c, v):
-            if not v: return
-            r0, c0 = top_left_of_merged(ws, r, c)
-            ws.cell(row=r0, column=c0).value = v
-
-        _set_rc(34, 11, env_str)  # K34
+    if not pages:
+        return
+    # 预留扩展点：后续如需写入日期等信息，可在此实现。
 
 
 # ===== 规范化 =====
@@ -1097,25 +1089,6 @@ def normalize_date(text: str) -> str:
         return f"{y}年{m}月{d}日"
     return s
 
-
-def normalize_env(text: str) -> str:
-    """
-    将用户输入的环境温度字符串规范化为“X℃”或“X.X℃”格式。
-
-    从输入中提取数字部分（忽略“℃”“度”等符号），整数温度去小数点，小数温度保留有效数字。
-    若无法提取有效数字，则返回原始字符串。
-
-    Args:
-        text: 用户输入的环境温度字符串（如“24”“24℃”“24.5度”）
-    Returns:
-        str: 标准化的温度字符串（如“24℃”“24.5℃”）
-    """
-    s = (text or "").strip()
-    if not s: return ""
-    m = re.search(r"-?\d+(?:\.\d+)?", s)
-    if not m: return s
-    val = float(m.group(0))
-    return f"{int(val)}℃" if val.is_integer() else f"{str(val).rstrip('0').rstrip('.')}℃"
 
 
 def _normalize_date_token(tok: str, base_year: int) -> str:
@@ -1727,7 +1700,7 @@ def prompt_date_buckets(categories_present, grouped):
     for i in range(1, n + 1):
         print(f"\n—— 第 {i} 天 ——")
         d = ask("📅 日期（20250101 / 2025年1月1日 / 2025 1 1 / 2025.1.1 / 2025-1-1 / 1-1 / 01-01）：")
-        e = ask("🌡 环境温度（24 / 24℃ / 24 度 / 24 C）：")
+
         rules = {}
         for cat in categories_present:
             if cat == "支撑":
@@ -1790,7 +1763,6 @@ def prompt_date_buckets(categories_present, grouped):
         buckets.append({
             "date_raw": d,
             "date": normalize_date(d) if d else "",
-            "env": normalize_env(e) if e else "",
             "rules": rules,
             "kws": [k for k in re.split(r"[,\s，]+", kws_txt) if k] if kws_txt else []
         })
@@ -1886,7 +1858,7 @@ def preview_buckets_generic(cat_byb, remain_by_cat, buckets, categories_present)
         parts = []
         for cat in categories_present:
             parts.append(f"{cat} {len(cat_byb[cat][i - 1])}")
-        print(f"  第{i}天 〔{b['date'] or b['date_raw'] or '未填日期'} / {b['env'] or '未填温度'}〕 → " + "、".join(parts))
+        print(f"  第{i}天 〔{b['date'] or b['date_raw'] or '未填日期'}〕 → " + "、".join(parts))
     if any(remain_by_cat[cat] for cat in categories_present):
         print("  ⚠️ 未分配：", end="")
         print("、".join(f"{cat} {len(remain_by_cat[cat])}" for cat in categories_present if remain_by_cat[cat]))
@@ -2053,29 +2025,28 @@ def _distribute_by_dates(items, date_entries):
     if date_entries[0][1] is not None:  # 配额模式
         cursor = 0
         total = len(items)
-        for i, (d, limit, env) in enumerate(date_entries):
+        for i, (d, limit) in enumerate(date_entries):
             if i < len(date_entries) - 1:
                 take = min(limit, total - cursor)
             else:
                 take = total - cursor
-            res.append((d, env, items[cursor:cursor + take]))
+            res.append((d, items[cursor:cursor + take]))
             cursor += take
     else:  # 均分
         days = len(date_entries)
         per = math.ceil(len(items) / days) if days else 0
         cursor = 0
-        for i, (d, _, env) in enumerate(date_entries):
+        for i, (d, _) in enumerate(date_entries):
             if i < days - 1:
                 take = min(per, len(items) - cursor)
             else:
                 take = len(items) - cursor
-            res.append((d, env, items[cursor:cursor + take]))
+            res.append((d, items[cursor:cursor + take]))
             cursor += take
     return res
 
-
 def _prompt_dates_and_limits():
-    """交互获取日期、每日数量及环境温度。"""
+    """交互获取日期和每日数量。"""
     while True:
         txt = ask(
             "日期（空格/逗号分隔；支持 20250101 / 2025年1月1日 / 2025 1 1 / 2025.1.1 / 2025-1-1 / 1-1 / 01-01，\n"
@@ -2105,10 +2076,8 @@ def _prompt_dates_and_limits():
                 limits = [int(t) for t in tokens]
                 break
         print(f"请输入{len(dates)}个正整数或留空。")
-    envs = []
-    for d in dates:
-        envs.append(ask(f"{d} 的环境温度（回车=不写）：\n→ "))
-    return list(zip(dates, limits, envs))
+
+    return list(zip(dates, limits))
 
 
 def _summarize_plan(tag, plan, all_floors=None):
@@ -2219,9 +2188,8 @@ def mode4_run(wb, grouped, categories_present):
     plan_dict = prompt_mode4_plan(floors_by_cat, categories_present)
 
     blocks_by_cat_bucket = {cat: defaultdict(list) for cat in CATEGORY_ORDER}
-    buckets = []  # list[{date, env}]
+    buckets = []  # list[{date}]
     date_idx = {}
-    env_by_date = {}
     leftover_by_cat = defaultdict(list)
 
     for (cat, fl), items in cf_groups.items():
@@ -2232,37 +2200,30 @@ def mode4_run(wb, grouped, categories_present):
         if not plan:
             leftover_by_cat[cat].extend(items)
             continue
-        for date, env, slice_items in _distribute_by_dates(items, plan):
+        for date, slice_items in _distribute_by_dates(items, plan):
             if not slice_items:
                 continue
             if date not in date_idx:
                 date_idx[date] = len(buckets)
-                buckets.append({"date": date, "env": env})
-                env_by_date[date] = env
-            elif env_by_date[date] != env:
-                print(f"⚠️ {date} 环境温度不一致，使用首次输入的 {env_by_date[date]}")
+                buckets.append({"date": date})
             idx = date_idx[date]
             blocks_by_cat_bucket[cat][idx].extend(expand_blocks(slice_items, PER_LINE_PER_BLOCK))
-
     # —— 兜底 ——
     left_total = sum(len(v) for v in leftover_by_cat.values())
     if left_total:
         print(f"⚠️ 还有 {left_total} 组未分配。")
-        ans = ask("是否给未指定楼层套用【默认日期/数量/温度】？(y=是 / 回车=否→回落到日期分桶)", lower=True)
+        ans = ask("是否给未指定楼层套用【默认日期/数量】？(y=是 / 回车=否→回落到日期分桶)", lower=True)
         if ans == "y":
             default_entries = _prompt_dates_and_limits()
             for cat in CATEGORY_ORDER:
                 if not leftover_by_cat.get(cat):
                     continue
-                for date, env, slice_items in _distribute_by_dates(leftover_by_cat[cat], default_entries):
+                for date, slice_items in _distribute_by_dates(leftover_by_cat[cat], default_entries):
                     if not slice_items:
                         continue
                     if date not in date_idx:
                         date_idx[date] = len(buckets)
-                        buckets.append({"date": date, "env": env})
-                        env_by_date[date] = env
-                    elif env_by_date[date] != env:
-                        print(f"⚠️ {date} 环境温度不一致，使用首次输入的 {env_by_date[date]}")
+                        buckets.append({"date": date})
                     idx = date_idx[date]
                     blocks_by_cat_bucket[cat][idx].extend(expand_blocks(slice_items, PER_LINE_PER_BLOCK))
                 leftover_by_cat[cat] = []
@@ -2281,13 +2242,10 @@ def mode4_run(wb, grouped, categories_present):
                             remain_by_cat[c] = []
                     blocks_by_cat_bucket2 = expand_blocks_by_bucket(cat_byb)
                     for i, bk in enumerate(buckets2):
-                        date, env = bk["date"], bk["env"]
+                        date = bk["date"]
                         if date not in date_idx:
                             date_idx[date] = len(buckets)
-                            buckets.append({"date": date, "env": env})
-                            env_by_date[date] = env
-                        elif env_by_date[date] != env:
-                            print(f"⚠️ {date} 环境温度不一致，使用首次输入的 {env_by_date[date]}")
+                            buckets.append({"date": date})
                         idx = date_idx[date]
                         for c in grouped_left.keys():
                             blocks_by_cat_bucket[c][idx].extend(blocks_by_cat_bucket2[c].get(i, []))
@@ -2335,7 +2293,6 @@ def mode4_run(wb, grouped, categories_present):
             wb,
             day_pages,
             normalize_date(buckets[i]["date"]),
-            normalize_env(buckets[i]["env"]),
         )
     prog.finish()
 
@@ -2433,8 +2390,7 @@ def run_mode(mode: str, wb, grouped, categories_present):
             prog.finish()
 
             d = normalize_date(ask("📅 整单日期（回车=不写）：") or "")
-            e = normalize_env(ask("🌡 整单环境（回车=不写）：") or "")
-            apply_meta_on_pages(wb, target, "", e)
+            apply_meta_on_pages(wb, target, d)
             cleanup_unused_mu_templates(wb, target)
             return target
 
@@ -2514,7 +2470,7 @@ def run_mode(mode: str, wb, grouped, categories_present):
             if cur != idx:
                 wb.move_sheet(wb[name], idx - cur)
 
-        apply_meta_on_pages(wb, target, "", "")
+        apply_meta_on_pages(wb, target, "")
         cleanup_unused_mu_templates(wb, target)
         return target
 
@@ -2551,8 +2507,7 @@ def run_mode(mode: str, wb, grouped, categories_present):
                 fill_blocks_to_pages(wb, pages_by_cat[cat], blocks_by_cat_ordered[cat], prog)
         prog.finish()
 
-        e = normalize_env(ask("🌡 环境（回车=不写）：") or "")
-        apply_meta_on_pages(wb, target, "", e)
+        apply_meta_on_pages(wb, target, "")
         cleanup_unused_mu_templates(wb, target)
         return target
 
@@ -2622,7 +2577,7 @@ def run_mode(mode: str, wb, grouped, categories_present):
                     day_pages += pages_slices_by_cat[cat][i]
                     day_blocks += blocks_slices_by_cat[cat][i]
             fill_blocks_to_pages(wb, day_pages, day_blocks, prog)
-            apply_meta_on_pages(wb, day_pages, buckets[i]["date"], buckets[i]["env"])
+            apply_meta_on_pages(wb, day_pages, buckets[i]["date"])
 
         prog.finish()
         cleanup_unused_mu_templates(wb, target)
