@@ -21,11 +21,11 @@
 # - 运行时请关闭目标 Word 和 Excel 文件，避免文件占用导致读写失败或数据损坏
 # - 程序会自动生成 “汇总原始记录.docx” 并存于 Word 同目录，用于数据核对
 # - 支持 “钢柱”“钢梁”“支撑”“网架” 分类，未识别构件自动归为 “其他” 类，共用钢柱模板格式
-# - 生成的 Excel 报告自动命名为 “The Unification_报告版.xlsx”，同名文件会自动加序号（如 “The Unification_报告版 (1).xlsx”）
+# - 生成的 Excel 报告自动命名为 “原始记录自动填写程序_报告版.xlsx”，同名文件会自动加序号（如 “原始记录自动填写程序_报告版 (1).xlsx”）
 # - “μ” 字符自动适配 Times New Roman 字体；仪器型号按平均值自动识别（<10→23-90，≥10→24-57）
 # - 日期分桶模式支持规则重叠处理，默认按 “后面的天” 优先，未分配数据可通过输入 “a” 并入最后一天
 
-# === The Unification ===
+# === 原始记录自动填写程序 ===
 
 
 from pathlib import Path
@@ -36,13 +36,12 @@ from docx import Document
 from docx.shared import RGBColor, Pt
 from openpyxl.styles import Font, Alignment
 
-# made by lck, an intern of this company in 2025 summer
 
 warnings.filterwarnings("ignore", category=SyntaxWarning)
 
-TITLE = "The Unification"
+TITLE = "原始记录自动填写程序"
 VERSION = "v 6.1.5"
-AUTHOR = "LCK"
+AUTHOR = "k"
 
 # ===== 默认路径 =====
 WORD_SRC_DEFAULT = Path(r"D:\eg\eg.docx")
@@ -1356,9 +1355,8 @@ def _parse_dates_simple(input_str: str):
 
     # ===== 交互 =====
 HELP_HOME = f"""
-====================  The Unification | 帮助中心（{VERSION}）  ====================
-this application was made by {AUTHOR} in 2025 summer
-
+==================== 原始记录自动填写程序 | 帮助中心（{VERSION}）  ====================
+this application was made by {AUTHOR} 
 开机三步走（顶层流程）：
   1) 在“请输入 Word 源路径”输入 .docx 路径（输入 help 打开本帮助）
   2) 读取并生成“汇总原始记录.docx”，随后依次询问【工程名称】【委托编号】
